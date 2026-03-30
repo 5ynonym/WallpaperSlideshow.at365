@@ -59,10 +59,8 @@ namespace WallpaperSlideshow365
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // タスクトレイアイコンとメニュー
             _iconRunning = new Icon("running.ico");
             _iconPaused = new Icon("paused.ico");
-
             _notifyIcon = new NotifyIcon
             {
                 Icon = _iconRunning,
@@ -102,7 +100,6 @@ namespace WallpaperSlideshow365
                 return;
             }
 
-            // モニターごとの画像キューを準備
             string[] exts = { ".jpg", ".jpeg", ".png", ".bmp" };
             _queues.Clear();
             _lastImages.Clear();
@@ -133,7 +130,7 @@ namespace WallpaperSlideshow365
 
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
 
-            Application.Run(); // タスクトレイ常駐
+            Application.Run();
 
             SystemEvents.DisplaySettingsChanged += (_, __) =>
             {
@@ -152,7 +149,7 @@ namespace WallpaperSlideshow365
             {
                 if (_queues[i] == null)
                 {
-                    monitorImages[i] = null; // 黒塗り
+                    monitorImages[i] = null;
                 }
                 else if (_queues[i].Count == 0)
                 {
@@ -243,21 +240,15 @@ namespace WallpaperSlideshow365
         {
             if (_paused)
             {
-                // 再開
                 _paused = false;
                 _notifyIcon!.Icon = _iconRunning;
                 _timer!.Change(0, _config.IntervalSeconds * 1000);
             }
             else
             {
-                // 一時停止
                 _paused = true;
                 _notifyIcon!.Icon = _iconPaused;
-
-                // タイマー停止
                 _timer!.Change(Timeout.Infinite, Timeout.Infinite);
-
-                // 壁紙を黒にする
                 OverwriteWithBlack(TempPath);
                 SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath,
                     SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
@@ -271,15 +262,10 @@ namespace WallpaperSlideshow365
                 var exe = Process.GetCurrentProcess().MainModule!.FileName!;
                 var args = Environment.GetCommandLineArgs();
 
-                // 現在の引数をそのまま渡して再起動
                 Process.Start(exe, string.Join(" ", args.Skip(1)));
-
-                // 自分を終了
                 Application.Exit();
             }
-            catch (Exception ex)
-            {
-            }
+            catch { }
         }
     }
 }
