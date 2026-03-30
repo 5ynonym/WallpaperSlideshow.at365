@@ -1,20 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
+using System.Diagnostics;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using System.Threading;
-using System.Windows.Forms;
-using System.Drawing;
-using System.Drawing.Imaging;
 using Microsoft.Win32;
 
 namespace WallpaperSlideshow365
 {
     public class MonitorConfig
     {
-        public string? Folder { get; set; } // nullなら黒塗り
+        public string? Folder { get; set; }
     }
 
     public class Config
@@ -33,6 +27,11 @@ namespace WallpaperSlideshow365
         private const uint SPIF_UPDATEINIFILE = 0x01;
         private const uint SPIF_SENDCHANGE = 0x02;
 
+        private static bool _paused = false;
+        private static NotifyIcon? _notifyIcon;
+        private static Icon? _iconRunning;
+        private static Icon? _iconPaused;
+
         private static readonly Random Rand = new();
         private static System.Threading.Timer? _timer;
         private static string TempPath => Path.Combine(
@@ -48,8 +47,8 @@ namespace WallpaperSlideshow365
             using var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\\Desktop", true);
             if (key != null)
             {
-                key.SetValue("WallpaperStyle", "22"); // スパン
-                key.SetValue("TileWallpaper", "0");
+                key.SetValue("WallpaperStyle", "22"); // 画像
+                key.SetValue("TileWallpaper", "0"); // スパン
             }
         }
 
@@ -61,21 +60,33 @@ namespace WallpaperSlideshow365
             Application.SetCompatibleTextRenderingDefault(false);
 
             // タスクトレイアイコンとメニュー
-            var notifyIcon = new NotifyIcon();
-            notifyIcon.Icon = SystemIcons.Application; // 必要なら app.ico などに差し替え
-            notifyIcon.Text = "WallpaperSlideshow365";
+            _iconRunning = new Icon("running.ico");
+            _iconPaused = new Icon("paused.ico");
+
+            _notifyIcon = new NotifyIcon
+            {
+                Icon = _iconRunning,
+                Text = "WallpaperSlideshow@365",
+                Visible = true
+            };
+            _notifyIcon.MouseClick += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left)
+                    TogglePause();
+            };
+
             var contextMenu = new ContextMenuStrip();
             var exitItem = new ToolStripMenuItem("終了(&X)");
             exitItem.Click += (s, e) => Application.Exit();
             contextMenu.Items.Add(exitItem);
-            notifyIcon.ContextMenuStrip = contextMenu;
-            notifyIcon.Visible = true;
+            _notifyIcon.ContextMenuStrip = contextMenu;
+            _notifyIcon.Visible = true;
 
             string configPath = args.Length > 0 ? args[0] : "config.json";
             if (!File.Exists(configPath))
             {
                 MessageBox.Show($"設定ファイルが見つかりません: {configPath}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                notifyIcon.Dispose();
+                _notifyIcon.Dispose();
                 return;
             }
 
@@ -87,7 +98,7 @@ namespace WallpaperSlideshow365
             catch (Exception ex)
             {
                 MessageBox.Show($"設定ファイルの読み込みに失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                notifyIcon.Dispose();
+                _notifyIcon.Dispose();
                 return;
             }
 
@@ -107,21 +118,33 @@ namespace WallpaperSlideshow365
                 }
                 else
                 {
-                    _queues.Add(null); // 設定が無い、または空・null・存在しない場合は黒塗り
+                    _queues.Add(item: null);
                 }
                 _lastImages.Add(null);
             }
 
-            AppDomain.CurrentDomain.ProcessExit += (s, e) => notifyIcon.Dispose();
-            Application.ApplicationExit += (s, e) => notifyIcon.Dispose();
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            Application.ApplicationExit += OnProcessExit;
+            void OnProcessExit(object? sender, EventArgs e)
+            {
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                _notifyIcon?.Dispose();
+            }
 
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
 
             Application.Run(); // タスクトレイ常駐
+
+            SystemEvents.DisplaySettingsChanged += (_, __) =>
+            {
+                RestartApplication();
+            };
         }
 
         private static void UpdateWallpaper()
         {
+            if (_paused) return;
+
             string?[] monitorImages = new string?[Screen.AllScreens.Length];
             string[] exts = { ".jpg", ".jpeg", ".png", ".bmp" };
 
@@ -214,6 +237,49 @@ namespace WallpaperSlideshow365
         private static List<string> Shuffle(List<string> list)
         {
             return list.OrderBy(_ => Rand.Next()).ToList();
+        }
+
+        private static void TogglePause()
+        {
+            if (_paused)
+            {
+                // 再開
+                _paused = false;
+                _notifyIcon!.Icon = _iconRunning;
+                _timer!.Change(0, _config.IntervalSeconds * 1000);
+            }
+            else
+            {
+                // 一時停止
+                _paused = true;
+                _notifyIcon!.Icon = _iconPaused;
+
+                // タイマー停止
+                _timer!.Change(Timeout.Infinite, Timeout.Infinite);
+
+                // 壁紙を黒にする
+                OverwriteWithBlack(TempPath);
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath,
+                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            }
+        }
+
+        private static void RestartApplication()
+        {
+            try
+            {
+                var exe = Process.GetCurrentProcess().MainModule!.FileName!;
+                var args = Environment.GetCommandLineArgs();
+
+                // 現在の引数をそのまま渡して再起動
+                Process.Start(exe, string.Join(" ", args.Skip(1)));
+
+                // 自分を終了
+                Application.Exit();
+            }
+            catch (Exception ex)
+            {
+            }
         }
     }
 }

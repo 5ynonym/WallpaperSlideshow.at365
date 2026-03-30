@@ -1,5 +1,5 @@
 {
-  "IntervalSeconds": 5,
+  "IntervalSeconds": 10,
   "Monitors": [
     { "Folder": "C:/Wallpapers/16-9" },
     { "Folder": "" }
