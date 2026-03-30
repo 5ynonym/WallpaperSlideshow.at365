@@ -55,6 +55,7 @@ namespace WallpaperSlideshow365
         [STAThread]
         public static void Main(string[] args)
         {
+            EnsureSingleInstance();
             SetWallpaperSpanMode();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -130,12 +131,12 @@ namespace WallpaperSlideshow365
 
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
 
-            Application.Run();
-
             SystemEvents.DisplaySettingsChanged += (_, __) =>
             {
-                RestartApplication();
+                Application.OpenForms[0]?.BeginInvoke(new Action(() => RestartApplication()));
             };
+
+            Application.Run();
         }
 
         private static void UpdateWallpaper()
@@ -255,17 +256,40 @@ namespace WallpaperSlideshow365
             }
         }
 
-        private static void RestartApplication()
+        private static bool _restarting = false;
+
+        private static void EnsureSingleInstance()
+        {
+            var current = Process.GetCurrentProcess();
+            var processes = Process.GetProcessesByName(current.ProcessName);
+
+            foreach (var p in processes)
+            {
+                if (p.Id != current.Id)
+                {
+                    try
+                    {
+                        p.Kill();
+                    }
+                    catch {}
+                }
+            }
+        }
+
+        public static async void RestartApplication()
         {
             try
             {
                 var exe = Process.GetCurrentProcess().MainModule!.FileName!;
-                var args = Environment.GetCommandLineArgs();
-
-                Process.Start(exe, string.Join(" ", args.Skip(1)));
-                Application.Exit();
+                await Task.Delay(5000);
+                Process.Start(exe);
             }
-            catch { }
+            catch
+            {
+            }
+
+            Environment.Exit(0);
         }
+
     }
 }
