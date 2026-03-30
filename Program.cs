@@ -60,20 +60,34 @@ namespace WallpaperSlideshow365
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            // タスクトレイアイコンとメニュー
+            var notifyIcon = new NotifyIcon();
+            notifyIcon.Icon = SystemIcons.Application; // 必要なら app.ico などに差し替え
+            notifyIcon.Text = "WallpaperSlideshow365";
+            var contextMenu = new ContextMenuStrip();
+            var exitItem = new ToolStripMenuItem("終了(&X)");
+            exitItem.Click += (s, e) => Application.Exit();
+            contextMenu.Items.Add(exitItem);
+            notifyIcon.ContextMenuStrip = contextMenu;
+            notifyIcon.Visible = true;
+
             string configPath = args.Length > 0 ? args[0] : "config.json";
             if (!File.Exists(configPath))
             {
                 MessageBox.Show($"設定ファイルが見つかりません: {configPath}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                notifyIcon.Dispose();
                 return;
             }
 
             try
             {
-                _config = JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath)) ?? new Config();
+                var options = new JsonSerializerOptions { AllowTrailingCommas = true };
+                _config = JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath), options) ?? new Config();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"設定ファイルの読み込みに失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                notifyIcon.Dispose();
                 return;
             }
 
@@ -98,11 +112,12 @@ namespace WallpaperSlideshow365
                 _lastImages.Add(null);
             }
 
-            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+            AppDomain.CurrentDomain.ProcessExit += (s, e) => notifyIcon.Dispose();
+            Application.ApplicationExit += (s, e) => notifyIcon.Dispose();
 
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
 
-            Application.Run(); // タスクトレイ等に常駐する場合はここでUI追加
+            Application.Run(); // タスクトレイ常駐
         }
 
         private static void UpdateWallpaper()
@@ -178,7 +193,7 @@ namespace WallpaperSlideshow365
                     gMain.DrawImage(img, new Rectangle(offsetX, offsetY, drawW, drawH));
                 }
             }
-            bmp.Save(path, System.Drawing.Imaging.ImageFormat.Jpeg);
+            bmp.Save(path, ImageFormat.Jpeg);
         }
 
         private static void OverwriteWithBlack(string targetPath)
@@ -191,14 +206,9 @@ namespace WallpaperSlideshow365
                 using var bmp = new Bitmap(1, 1);
                 using var g = Graphics.FromImage(bmp);
                 g.FillRectangle(Brushes.Black, new Rectangle(0, 0, 1, 1));
-                bmp.Save(defaultBlack, System.Drawing.Imaging.ImageFormat.Bmp);
+                bmp.Save(defaultBlack, ImageFormat.Bmp);
             }
             File.Copy(defaultBlack, targetPath, overwrite: true);
-        }
-
-        private static void OnProcessExit(object? sender, EventArgs e)
-        {
-            SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
         }
 
         private static List<string> Shuffle(List<string> list)
