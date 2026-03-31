@@ -4,17 +4,11 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Win32;
 
-namespace WallpaperSlideshow365
+namespace at365.WallpaperSlideshow
 {
     public class MonitorConfig
     {
         public string? Folder { get; set; }
-    }
-
-    public class Config
-    {
-        public int IntervalSeconds { get; set; } = 60;
-        public List<MonitorConfig> Monitors { get; set; } = new();
     }
 
     public static class Program
@@ -34,9 +28,7 @@ namespace WallpaperSlideshow365
 
         private static readonly Random Rand = new();
         private static System.Threading.Timer? _timer;
-        private static string TempPath => Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "merged_wallpaper.jpg");
+        private static string TempPath => Const.MergedJpgPath;
 
         private static Config _config = new();
         private static List<Queue<string>> _queues = new();
@@ -51,14 +43,16 @@ namespace WallpaperSlideshow365
         [STAThread]
         public static void Main(string[] args)
         {
+            _config = Config.LoadConfig();
+            if (_config == null) return;
+
             EnsureSingleInstance();
             SetWallpaperSpanMode();
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-
+            
             SetupNotifyIcon();
-            LoadConfig(args);
             InitializeMonitorState();
 
             var handleRequiredInitialize = () =>
@@ -134,29 +128,6 @@ namespace WallpaperSlideshow365
             contextMenu.Items.Add(exitItem);
             _notifyIcon.ContextMenuStrip = contextMenu;
             _notifyIcon.Visible = true;
-        }
-
-        private static void LoadConfig(string[] args)
-        {
-            string configPath = args.Length > 0 ? args[0] : "config.json";
-            if (!File.Exists(configPath))
-            {
-                MessageBox.Show($"設定ファイルが見つかりません: {configPath}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _notifyIcon!.Dispose();
-                return;
-            }
-
-            try
-            {
-                var options = new JsonSerializerOptions { AllowTrailingCommas = true };
-                _config = JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath), options) ?? new Config();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"設定ファイルの読み込みに失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _notifyIcon!.Dispose();
-                return;
-            }
         }
 
         private static void InitializeMonitorState()
