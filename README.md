@@ -12,23 +12,29 @@
 
 ## 📁 設定ファイル（config.json）
 
+`%UserProfile%\AppData\Roaming\at365\WallpaperSlideshow\config.json` に配置される JSON ファイルが優先して読み込まれます。
+なければ、アプリケーションの実行ファイルと同じフォルダにある `config.json` が読み込まれます。
+
 ```json
 {
   "IntervalSeconds": 60,
   "Monitors": [
-    { "Folder": "C:/Wallpapers/Monitor1" },
-    { "Folder": "C:/Wallpapers/Monitor2" }
+    { "Folder": "C:/Wallpapers/Monitor1", "Mode": "Fit" },
+    { "Folder": "C:/Wallpapers/Monitor2", "Mode": "Fill" }
   ]
 }
 ```
 
-- `IntervalSeconds`  
-  壁紙更新間隔（秒）
-- `Monitors[n].Folder`  
-  モニター n に使用する画像フォルダ
+- `IntervalSeconds`: 壁紙更新間隔（秒）
+- `Monitors[n].Folder`: モニター n に使用する画像フォルダ
   - モニター順 n は左から右への順番 (Windowsのディスプレイ設定の順番とは必ずしも一致しない)
   - サブフォルダも含めた指定フォルダ配下の画像をランダムに壁紙に設定 (1巡するまで重複なし)
   - 対象モニターの設定なし、もしくは空文字なら、そのモニターは壁紙なしで真っ黒
+- `Monitors[n].Mode`: 画像の拡大縮小モード: 
+  - Fill: 画面いっぱい
+  - Fit: 黒帯ありで収まるように (既定)
+  - Stretch: アスペクト比無視で引き伸ばし
+  - Center: 中央に等倍表示
 
 ---
 

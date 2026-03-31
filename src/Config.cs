@@ -2,12 +2,22 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace at365.WallpaperSlideshow
 {
+    public enum StretchMode
+    {
+        Fill,    // 画面いっぱい（現在の動作）
+        Fit,     // 黒帯ありで収まるように
+        Stretch, // アスペクト比無視で引き伸ばし
+        Center   // 中央に等倍表示
+    }
+
     public class MonitorConfig
     {
         public string? Folder { get; set; }
+        public StretchMode? Mode { get; set; } = StretchMode.Fit;
     }
 
     public class Config
@@ -35,7 +45,12 @@ namespace at365.WallpaperSlideshow
 
             try
             {
-                var options = new JsonSerializerOptions { AllowTrailingCommas = true };
+                var options = new JsonSerializerOptions
+                {
+                    AllowTrailingCommas = true,
+                    ReadCommentHandling = JsonCommentHandling.Skip
+                };
+                options.Converters.Add(new JsonStringEnumConverter());
                 return JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath), options) ?? new Config();
             }
             catch (Exception ex)

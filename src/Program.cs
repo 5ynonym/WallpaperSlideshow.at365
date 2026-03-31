@@ -202,15 +202,59 @@ namespace at365.WallpaperSlideshow
                 else
                 {
                     using var img = Image.FromFile(monitorImages[i]!);
-                    float scale = Math.Max((float)drawRect.Width / img.Width, (float)drawRect.Height / img.Height);
-                    int drawW = (int)(img.Width * scale);
-                    int drawH = (int)(img.Height * scale);
-                    int offsetX = drawRect.Left + (drawRect.Width - drawW) / 2;
-                    int offsetY = drawRect.Top + (drawRect.Height - drawH) / 2;
-                    gMain.DrawImage(img, new Rectangle(offsetX, offsetY, drawW, drawH));
+                    var mode = (i < _config.Monitors.Count) ? _config.Monitors[i].Mode : null;
+                    DrawImageWithMode(gMain, img, drawRect, mode ?? StretchMode.Fit);
                 }
             }
             bmp.Save(path, ImageFormat.Jpeg);
+        }
+
+        private static void DrawImageWithMode(Graphics g, Image img, Rectangle drawRect, StretchMode mode)
+        {
+            switch (mode)
+            {
+                case StretchMode.Fill:
+                    {
+                        float scale = Math.Max(
+                            (float)drawRect.Width / img.Width,
+                            (float)drawRect.Height / img.Height
+                        );
+                        int w = (int)(img.Width * scale);
+                        int h = (int)(img.Height * scale);
+                        int x = drawRect.Left + (drawRect.Width - w) / 2;
+                        int y = drawRect.Top + (drawRect.Height - h) / 2;
+                        g.DrawImage(img, new Rectangle(x, y, w, h));
+                        break;
+                    }
+
+                case StretchMode.Fit:
+                    {
+                        float scale = Math.Min(
+                            (float)drawRect.Width / img.Width,
+                            (float)drawRect.Height / img.Height
+                        );
+                        int w = (int)(img.Width * scale);
+                        int h = (int)(img.Height * scale);
+                        int x = drawRect.Left + (drawRect.Width - w) / 2;
+                        int y = drawRect.Top + (drawRect.Height - h) / 2;
+                        g.DrawImage(img, new Rectangle(x, y, w, h));
+                        break;
+                    }
+
+                case StretchMode.Stretch:
+                    {
+                        g.DrawImage(img, drawRect);
+                        break;
+                    }
+
+                case StretchMode.Center:
+                    {
+                        int x = drawRect.Left + (drawRect.Width - img.Width) / 2;
+                        int y = drawRect.Top + (drawRect.Height - img.Height) / 2;
+                        g.DrawImage(img, new Rectangle(x, y, img.Width, img.Height));
+                        break;
+                    }
+            }
         }
 
         private static void OverwriteWithBlack(string targetPath)
