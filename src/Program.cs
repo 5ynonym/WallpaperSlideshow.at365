@@ -8,8 +8,7 @@ namespace at365.WallpaperSlideshow
     public static class Program
     {
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        private static extern bool SystemParametersInfo(
-            uint uiAction, uint uiParam, string pvParam, uint fWinIni);
+        private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, string pvParam, uint fWinIni);
 
         private const uint SPI_SETDESKWALLPAPER = 0x0014;
         private const uint SPIF_UPDATEINIFILE = 0x01;
@@ -34,6 +33,8 @@ namespace at365.WallpaperSlideshow
         private static FolderWatcher? _folderWatcher;
         private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
 
+        public static Screen[] StableScreens => _cachedScreens ??= Screen.AllScreens.OrderBy(s => s.Bounds.Left).ThenBy(s => s.Bounds.Top).ToArray();
+
         [STAThread]
         public static void Main(string[] args)
         {
@@ -49,12 +50,12 @@ namespace at365.WallpaperSlideshow
             SetupNotifyIcon();
             InitializeMonitorState();
 
-            var handleRequiredInitialize = () =>
+            static void handleRequiredInitialize()
             {
                 InitializeMonitorState();
                 UpdateWallpaper(); ;
-            };
-            SystemEvents.DisplaySettingsChanged += (_, __) => Application.OpenForms[0]?.BeginInvoke(handleRequiredInitialize);
+            }
+            SystemEvents.DisplaySettingsChanged += (_, _) => Application.OpenForms[0]?.BeginInvoke(handleRequiredInitialize);
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), handleRequiredInitialize);
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
 
@@ -69,23 +70,7 @@ namespace at365.WallpaperSlideshow
             {
                 if (p.Id != current.Id)
                 {
-                    try
-                    {
-                        p.Kill();
-                    }
-                    catch { }
-                }
-            }
-        }
-
-        public static Screen[] StableScreens
-        {
-            get
-            {
-                lock (_screenLock)
-                {
-                    _cachedScreens ??= Screen.AllScreens.OrderBy(s => s.Bounds.Left).ThenBy(s => s.Bounds.Top).ToArray();
-                    return _cachedScreens!;
+                    try { p.Kill(); } catch { }
                 }
             }
         }
@@ -195,7 +180,6 @@ namespace at365.WallpaperSlideshow
 
         private static void ComposeWallpaper(string?[] monitorImages, string path)
         {
-            // 仮想デスクトップ全体の論理座標範囲（DPI=96前提）
             Rectangle virtualBounds = Rectangle.Empty;
             var screens = StableScreens;
             foreach (var screen in screens)
@@ -267,14 +251,10 @@ namespace at365.WallpaperSlideshow
 
         private static void ApplicationShutdown()
         {
-            try
-            {
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-                _notifyIcon?.Dispose();
-            }
-            catch { }
-
-            Application.Exit();
+            try { SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE); } catch { }
+            try { _folderWatcher?.Dispose(); } catch { }
+            try { _notifyIcon?.Dispose();} catch { }
+            try { Application.Exit(); } catch { }
         }
 
     }
