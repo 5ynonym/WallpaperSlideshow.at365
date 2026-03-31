@@ -19,7 +19,6 @@ namespace at365.WallpaperSlideshow
         private static Icon? _iconRunning;
         private static Icon? _iconPaused;
 
-        private static readonly Random Rand = new();
         private static System.Threading.Timer? _timer;
         private static string TempPath => Const.WallpaperPicturePath;
 
@@ -161,7 +160,7 @@ namespace at365.WallpaperSlideshow
                         var shuffled = Shuffle(files);
                         if (_lastImages[i] != null && shuffled.Count > 1 && shuffled[0] == _lastImages[i])
                         {
-                            int swapIndex = Rand.Next(1, shuffled.Count);
+                            int swapIndex = Random.Shared.Next(1, shuffled.Count);
                             (shuffled[0], shuffled[swapIndex]) = (shuffled[swapIndex], shuffled[0]);
                         }
 
@@ -272,7 +271,7 @@ namespace at365.WallpaperSlideshow
 
         private static List<string> Shuffle(List<string> list)
         {
-            return [.. list.OrderBy(_ => Rand.Next())];
+            return list.OrderBy(_ => Random.Shared.Next()).ToList();
         }
 
         private static void TogglePause()
