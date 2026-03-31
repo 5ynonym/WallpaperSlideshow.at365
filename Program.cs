@@ -42,15 +42,8 @@ namespace WallpaperSlideshow365
         private static List<Queue<string>> _queues = new();
         private static List<string?> _lastImages = new();
 
-        private static void SetWallpaperSpanMode()
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\\Desktop", true);
-            if (key != null)
-            {
-                key.SetValue("WallpaperStyle", "22"); // 画像
-                key.SetValue("TileWallpaper", "0"); // スパン
-            }
-        }
+        private static Screen[]? _cachedScreens;
+        private static readonly object _screenLock = new();
 
         private static FolderWatcher? _folderWatcher;
         private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
@@ -68,16 +61,55 @@ namespace WallpaperSlideshow365
             LoadConfig(args);
             InitializeMonitorState();
 
-            var handleRequiredInitialize = ()=>
+            var handleRequiredInitialize = () =>
             {
                 InitializeMonitorState();
-                UpdateWallpaper();;
+                UpdateWallpaper(); ;
             };
             SystemEvents.DisplaySettingsChanged += (_, __) => Application.OpenForms[0]?.BeginInvoke(handleRequiredInitialize);
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), handleRequiredInitialize);
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
 
             Application.Run();
+        }
+
+        private static void EnsureSingleInstance()
+        {
+            var current = Process.GetCurrentProcess();
+            var processes = Process.GetProcessesByName(current.ProcessName);
+            foreach (var p in processes)
+            {
+                if (p.Id != current.Id)
+                {
+                    try
+                    {
+                        p.Kill();
+                    }
+                    catch { }
+                }
+            }
+        }
+
+        public static Screen[] StableScreens
+        {
+            get
+            {
+                lock (_screenLock)
+                {
+                    _cachedScreens ??= Screen.AllScreens.OrderBy(s => s.Bounds.Left).ThenBy(s => s.Bounds.Top).ToArray();
+                    return _cachedScreens!;
+                }
+            }
+        }
+
+        private static void SetWallpaperSpanMode()
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\\Desktop", true);
+            if (key != null)
+            {
+                key.SetValue("WallpaperStyle", "22"); // 画像
+                key.SetValue("TileWallpaper", "0"); // スパン
+            }
         }
 
         private static void SetupNotifyIcon()
@@ -131,8 +163,9 @@ namespace WallpaperSlideshow365
         {
             _queues.Clear();
             _lastImages.Clear();
+            _cachedScreens = null;
 
-            for (int i = 0; i < Screen.AllScreens.Length; i++)
+            for (int i = 0; i < StableScreens.Length; i++)
             {
                 string? folder = (i < _config.Monitors.Count) ? _config.Monitors[i].Folder : null;
 
@@ -157,12 +190,13 @@ namespace WallpaperSlideshow365
         {
             if (_paused) return;
 
-            if (_queues.Count != Screen.AllScreens.Length)
+            var screens = StableScreens;
+            if (_queues.Count != screens.Length)
                 InitializeMonitorState();
 
-            string?[] monitorImages = new string?[Screen.AllScreens.Length];
+            string?[] monitorImages = new string?[screens.Length];
 
-            for (int i = 0; i < Screen.AllScreens.Length; i++)
+            for (int i = 0; i < screens.Length; i++)
             {
                 if (_queues[i].Count == 0)
                 {
@@ -198,16 +232,17 @@ namespace WallpaperSlideshow365
         {
             // 仮想デスクトップ全体の論理座標範囲（DPI=96前提）
             Rectangle virtualBounds = Rectangle.Empty;
-            foreach (var screen in Screen.AllScreens)
+            var screens = StableScreens;
+            foreach (var screen in screens)
                 virtualBounds = Rectangle.Union(virtualBounds, screen.Bounds);
 
             using var bmp = new Bitmap(virtualBounds.Width, virtualBounds.Height);
             using var gMain = Graphics.FromImage(bmp);
             gMain.FillRectangle(Brushes.Black, new Rectangle(0, 0, bmp.Width, bmp.Height));
 
-            for (int i = 0; i < Screen.AllScreens.Length; i++)
+            for (int i = 0; i < screens.Length; i++)
             {
-                var screen = Screen.AllScreens[i];
+                var screen = screens[i];
                 var bounds = screen.Bounds;
                 var drawRect = new Rectangle(bounds.Left - virtualBounds.Left, bounds.Top - virtualBounds.Top, bounds.Width, bounds.Height);
 
@@ -265,23 +300,6 @@ namespace WallpaperSlideshow365
                 OverwriteWithBlack(TempPath);
                 SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath,
                     SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-            }
-        }
-
-        private static void EnsureSingleInstance()
-        {
-            var current = Process.GetCurrentProcess();
-            var processes = Process.GetProcessesByName(current.ProcessName);
-            foreach (var p in processes)
-            {
-                if (p.Id != current.Id)
-                {
-                    try
-                    {
-                        p.Kill();
-                    }
-                    catch { }
-                }
             }
         }
 
