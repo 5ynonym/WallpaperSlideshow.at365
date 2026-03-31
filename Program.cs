@@ -87,7 +87,7 @@ namespace WallpaperSlideshow365
             _notifyIcon = new NotifyIcon
             {
                 Icon = _iconRunning,
-                Text = "WallpaperSlideshow@365",
+                Text = "WallpaperSlideshow.at365",
                 Visible = true
             };
             _notifyIcon.MouseClick += (s, e) =>
