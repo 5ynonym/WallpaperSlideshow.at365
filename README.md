@@ -34,9 +34,8 @@
 
 ## ▶ 使い方
 
-1. `config.json` を用意  
-2. `running.ico` と `paused.ico` をアプリと同じフォルダに置く  
-3. `WallpaperSlideshow365.exe config.json` を実行  
-4. タスクトレイに常駐  
+1. `config.json` を編集
+2. `WallpaperSlideshow365.exe` を実行  
+3. タスクトレイに常駐  
    - **左クリック：一時停止／再開**
    - **右クリック：終了**
