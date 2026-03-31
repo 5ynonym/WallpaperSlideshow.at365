@@ -5,6 +5,11 @@ using System.Text.Json;
 
 namespace at365.WallpaperSlideshow
 {
+    public class MonitorConfig
+    {
+        public string? Folder { get; set; }
+    }
+
     public class Config
     {
         public int IntervalSeconds { get; set; } = 60;

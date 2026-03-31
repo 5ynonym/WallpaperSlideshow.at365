@@ -8,6 +8,7 @@
         public static string ConfigFileName = "config.json";
         public static string ConfigPath = Path.Combine(AppDataFolder, ConfigFileName);
 
-        public static string MergedJpgPath => Path.Combine(Const.AppDataFolder, "merged_wallpaper.jpg");
+        public static string EmptyPicturePath = Path.Combine(AppDataFolder, "empty.jpg");
+        public static string WallpaperPicturePath => Path.Combine(AppDataFolder, "wallpaper.jpg");
     }
 }

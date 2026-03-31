@@ -1,16 +1,10 @@
 using System.Diagnostics;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
-using System.Text.Json;
 using Microsoft.Win32;
 
 namespace at365.WallpaperSlideshow
 {
-    public class MonitorConfig
-    {
-        public string? Folder { get; set; }
-    }
-
     public static class Program
     {
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
@@ -28,7 +22,7 @@ namespace at365.WallpaperSlideshow
 
         private static readonly Random Rand = new();
         private static System.Threading.Timer? _timer;
-        private static string TempPath => Const.MergedJpgPath;
+        private static string TempPath => Const.WallpaperPicturePath;
 
         private static Config _config = new();
         private static List<Queue<string>> _queues = new();
@@ -237,17 +231,15 @@ namespace at365.WallpaperSlideshow
 
         private static void OverwriteWithBlack(string targetPath)
         {
-            string defaultBlack = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "default.bmp");
-            if (!File.Exists(defaultBlack))
+            string emptyPicPath = Const.EmptyPicturePath;
+            if (!File.Exists(emptyPicPath))
             {
                 using var bmp = new Bitmap(1, 1);
                 using var g = Graphics.FromImage(bmp);
                 g.FillRectangle(Brushes.Black, new Rectangle(0, 0, 1, 1));
-                bmp.Save(defaultBlack, ImageFormat.Bmp);
+                bmp.Save(emptyPicPath, ImageFormat.Jpeg);
             }
-            File.Copy(defaultBlack, targetPath, overwrite: true);
+            File.Copy(emptyPicPath, targetPath, overwrite: true);
         }
 
         private static List<string> Shuffle(List<string> list)
@@ -259,18 +251,17 @@ namespace at365.WallpaperSlideshow
         {
             if (_paused)
             {
-                _paused = false;
-                _notifyIcon!.Icon = _iconRunning;
                 _timer!.Change(0, _config.IntervalSeconds * 1000);
+                _paused = false;
+                _notifyIcon?.Icon = _iconRunning;
+                
             }
             else
             {
-                _paused = true;
-                _notifyIcon!.Icon = _iconPaused;
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
                 _timer!.Change(Timeout.Infinite, Timeout.Infinite);
-                OverwriteWithBlack(TempPath);
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath,
-                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                _paused = true;
+                _notifyIcon?.Icon = _iconPaused;
             }
         }
 
@@ -278,14 +269,7 @@ namespace at365.WallpaperSlideshow
         {
             try
             {
-                OverwriteWithBlack(TempPath);
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath,
-                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-            }
-            catch { }
-
-            try
-            {
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
                 _notifyIcon?.Dispose();
             }
             catch { }
