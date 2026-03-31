@@ -52,14 +52,36 @@ namespace WallpaperSlideshow365
             }
         }
 
+        private static FolderWatcher? _folderWatcher;
+        private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
+
         [STAThread]
         public static void Main(string[] args)
         {
             EnsureSingleInstance();
             SetWallpaperSpanMode();
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            SetupNotifyIcon();
+            LoadConfig(args);
+            InitializeMonitorState();
+
+            var handleRequiredInitialize = ()=>
+            {
+                InitializeMonitorState();
+                UpdateWallpaper();;
+            };
+            SystemEvents.DisplaySettingsChanged += (_, __) => Application.OpenForms[0]?.BeginInvoke(handleRequiredInitialize);
+            _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), handleRequiredInitialize);
+            _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
+
+            Application.Run();
+        }
+
+        private static void SetupNotifyIcon()
+        {
             _iconRunning = new Icon("running.ico");
             _iconPaused = new Icon("paused.ico");
             _notifyIcon = new NotifyIcon
@@ -76,16 +98,19 @@ namespace WallpaperSlideshow365
 
             var contextMenu = new ContextMenuStrip();
             var exitItem = new ToolStripMenuItem("終了(&X)");
-            exitItem.Click += (s, e) => Application.Exit();
+            exitItem.Click += (s, e) => ApplicationShutdown();
             contextMenu.Items.Add(exitItem);
             _notifyIcon.ContextMenuStrip = contextMenu;
             _notifyIcon.Visible = true;
+        }
 
+        private static void LoadConfig(string[] args)
+        {
             string configPath = args.Length > 0 ? args[0] : "config.json";
             if (!File.Exists(configPath))
             {
                 MessageBox.Show($"設定ファイルが見つかりません: {configPath}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _notifyIcon.Dispose();
+                _notifyIcon!.Dispose();
                 return;
             }
 
@@ -97,89 +122,76 @@ namespace WallpaperSlideshow365
             catch (Exception ex)
             {
                 MessageBox.Show($"設定ファイルの読み込みに失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _notifyIcon.Dispose();
+                _notifyIcon!.Dispose();
                 return;
             }
+        }
 
-            string[] exts = { ".jpg", ".jpeg", ".png", ".bmp" };
+        private static void InitializeMonitorState()
+        {
             _queues.Clear();
             _lastImages.Clear();
+
             for (int i = 0; i < Screen.AllScreens.Length; i++)
             {
-                if (i < _config.Monitors.Count && !string.IsNullOrWhiteSpace(_config.Monitors[i]?.Folder)
-                    && Directory.Exists(_config.Monitors[i].Folder))
+                string? folder = (i < _config.Monitors.Count) ? _config.Monitors[i].Folder : null;
+
+                if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
                 {
-                    var files = Directory.EnumerateFiles(_config.Monitors[i].Folder, "*.*", SearchOption.AllDirectories)
-                        .Where(f => exts.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    var files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+                        .Where(f => ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant()))
                         .ToList();
+
                     _queues.Add(new Queue<string>(Shuffle(files)));
                 }
                 else
                 {
-                    _queues.Add(item: null);
+                    _queues.Add(new Queue<string>());
                 }
+
                 _lastImages.Add(null);
             }
-
-            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
-            Application.ApplicationExit += OnProcessExit;
-            void OnProcessExit(object? sender, EventArgs e)
-            {
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-                _notifyIcon?.Dispose();
-            }
-
-            _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
-
-            SystemEvents.DisplaySettingsChanged += (_, __) =>
-            {
-                Application.OpenForms[0]?.BeginInvoke(new Action(() => RestartApplication()));
-            };
-
-            Application.Run();
         }
 
         private static void UpdateWallpaper()
         {
             if (_paused) return;
 
+            if (_queues.Count != Screen.AllScreens.Length)
+                InitializeMonitorState();
+
             string?[] monitorImages = new string?[Screen.AllScreens.Length];
-            string[] exts = { ".jpg", ".jpeg", ".png", ".bmp" };
 
             for (int i = 0; i < Screen.AllScreens.Length; i++)
             {
-                if (_queues[i] == null)
+                if (_queues[i].Count == 0)
                 {
-                    monitorImages[i] = null;
-                }
-                else if (_queues[i].Count == 0)
-                {
-                    if (i < _config.Monitors.Count && !string.IsNullOrWhiteSpace(_config.Monitors[i].Folder)
-                        && Directory.Exists(_config.Monitors[i].Folder))
+                    string? folder = (i < _config.Monitors.Count) ? _config.Monitors[i].Folder : null;
+
+                    if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
                     {
-                        var files = Directory.EnumerateFiles(_config.Monitors[i].Folder, "*.*", SearchOption.AllDirectories)
-                            .Where(f => exts.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                        var files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+                            .Where(f => ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant()))
                             .ToList();
+
                         var shuffled = Shuffle(files);
                         if (_lastImages[i] != null && shuffled.Count > 1 && shuffled[0] == _lastImages[i])
                         {
                             int swapIndex = Rand.Next(1, shuffled.Count);
                             (shuffled[0], shuffled[swapIndex]) = (shuffled[swapIndex], shuffled[0]);
                         }
+
                         _queues[i] = new Queue<string>(shuffled);
                     }
-                    monitorImages[i] = _queues[i].Count > 0 ? _queues[i].Dequeue() : null;
                 }
-                else
-                {
-                    monitorImages[i] = _queues[i].Dequeue();
-                }
+
+                monitorImages[i] = _queues[i].Count > 0 ? _queues[i].Dequeue() : null;
                 _lastImages[i] = monitorImages[i];
             }
 
             ComposeWallpaper(monitorImages, TempPath);
             SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-            OverwriteWithBlack(TempPath); // フェールセーフ
+            OverwriteWithBlack(TempPath);
         }
 
         private static void ComposeWallpaper(string?[] monitorImages, string path)
@@ -234,7 +246,7 @@ namespace WallpaperSlideshow365
 
         private static List<string> Shuffle(List<string> list)
         {
-            return list.OrderBy(_ => Rand.Next()).ToList();
+            return [.. list.OrderBy(_ => Rand.Next())];
         }
 
         private static void TogglePause()
@@ -256,13 +268,10 @@ namespace WallpaperSlideshow365
             }
         }
 
-        private static bool _restarting = false;
-
         private static void EnsureSingleInstance()
         {
             var current = Process.GetCurrentProcess();
             var processes = Process.GetProcessesByName(current.ProcessName);
-
             foreach (var p in processes)
             {
                 if (p.Id != current.Id)
@@ -271,24 +280,28 @@ namespace WallpaperSlideshow365
                     {
                         p.Kill();
                     }
-                    catch {}
+                    catch { }
                 }
             }
         }
 
-        public static async void RestartApplication()
+        private static void ApplicationShutdown()
         {
             try
             {
-                var exe = Process.GetCurrentProcess().MainModule!.FileName!;
-                await Task.Delay(5000);
-                Process.Start(exe);
+                OverwriteWithBlack(TempPath);
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath,
+                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
-            catch
-            {
-            }
+            catch { }
 
-            Environment.Exit(0);
+            try
+            {
+                _notifyIcon?.Dispose();
+            }
+            catch { }
+
+            Application.Exit();
         }
 
     }
