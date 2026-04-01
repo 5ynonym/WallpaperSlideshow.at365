@@ -54,7 +54,7 @@ namespace at365.WallpaperSlideshow
 
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), InitializeApplication);
-            _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
+            _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, _config.IntervalSeconds * 1000, _config.IntervalSeconds * 1000);
 
             Application.Run(wndProcForm);
         }
@@ -99,8 +99,13 @@ namespace at365.WallpaperSlideshow
             };
 
             var contextMenu = new ContextMenuStrip();
+
+            var openDataFolderItem = new ToolStripMenuItem("データフォルダを開く(&D)");
+            openDataFolderItem.Click += (_, _) => OpenDataFolder();
+            contextMenu.Items.Add(openDataFolderItem);
+
             var exitItem = new ToolStripMenuItem("終了(&X)");
-            exitItem.Click += (s, e) => ApplicationShutdown();
+            exitItem.Click += (_, _) => ApplicationShutdown();
             contextMenu.Items.Add(exitItem);
             _notifyIcon.ContextMenuStrip = contextMenu;
             _notifyIcon.Visible = true;
@@ -201,16 +206,20 @@ namespace at365.WallpaperSlideshow
                 }
                 else
                 {
-                    Image? img = null;
-                    try { img = Image.FromFile(monitorImages[i]!); }
-                    catch { continue; } // 黒塗りにしてスキップ
-
-                    var mode = (i < _config.Monitors.Count) ? _config.Monitors[i].Mode : null;
-                    DrawImageWithMode(gMain, img, drawRect, mode ?? StretchMode.Fit);
+                    try
+                    {
+                        using var img = Image.FromFile(monitorImages[i]!);
+                        var mode = (i < _config.Monitors.Count) ? _config.Monitors[i].Mode : null;
+                        DrawImageWithMode(gMain, img, drawRect, mode ?? StretchMode.Fit);
+                    }
+                    catch
+                    {
+                        gMain.FillRectangle(Brushes.Black, drawRect);
+                    }
                 }
             }
 
-            try { bmp.Save(path, ImageFormat.Jpeg); } catch { }
+            try { bmp.Save(path, ImageFormat.Bmp); } catch { }
         }
 
         private static void DrawImageWithMode(Graphics g, Image img, Rectangle drawRect, StretchMode mode)
@@ -263,18 +272,17 @@ namespace at365.WallpaperSlideshow
 
         private static void OverwriteWithBlack(string targetPath)
         {
-            string emptyPicPath = Const.EmptyPicturePath;
-            if (!File.Exists(emptyPicPath))
+            try
             {
                 using var bmp = new Bitmap(1, 1);
                 using var g = Graphics.FromImage(bmp);
                 g.FillRectangle(Brushes.Black, new Rectangle(0, 0, 1, 1));
 
-                try { bmp.Save(emptyPicPath, ImageFormat.Jpeg); } catch { }
+                bmp.Save(targetPath, ImageFormat.Bmp);
             }
-
-            try { File.Copy(emptyPicPath, targetPath, overwrite: true); } catch { }
+            catch { }
         }
+
 
         private static List<string> Shuffle(List<string> list)
         {
@@ -300,6 +308,19 @@ namespace at365.WallpaperSlideshow
             }
         }
 
+        private static void OpenDataFolder()
+        {
+            try
+            {
+                string dataPath = Const.AppDataFolder;
+                if (!Directory.Exists(Const.AppDataFolder))
+                    Directory.CreateDirectory(Const.AppDataFolder);
+
+                Process.Start("explorer.exe", Const.AppDataFolder);
+            }
+            catch { }
+        }
+
         internal static void ApplicationShutdown()
         {
             try
@@ -312,6 +333,5 @@ namespace at365.WallpaperSlideshow
             try { _notifyIcon?.Dispose(); } catch { }
             try { Application.Exit(); } catch { }
         }
-
     }
 }
