@@ -129,24 +129,27 @@ namespace at365.WallpaperSlideshow
             historyRoot.DropDownOpening += (_, _) =>
             {
                 historyRoot.DropDownItems.Clear();
-                if (_historyPerMonitor == null || _historyPerMonitor.Length != StableScreens.Length)
+
+                if (_historyPerMonitor == null ||
+                    _historyPerMonitor.Length != StableScreens.Length)
                 {
                     _historyPerMonitor = new List<string>[StableScreens.Length];
                     for (int j = 0; j < _historyPerMonitor.Length; j++)
                         _historyPerMonitor[j] = new List<string>();
                 }
 
+                var thumbnailCache = new Dictionary<string, (Image? img, string? size, string? res)>();
                 for (int i = 0; i < _historyPerMonitor.Length; i++)
                 {
                     int monitorIndex = i;
-                    var monItem = new ToolStripMenuItem($"Monitor: {monitorIndex + 1}");
+
+                    var monItem = new ToolStripMenuItem($"{monitorIndex + 1}: ");
                     historyRoot.DropDownItems.Add(monItem);
 
                     monItem.DropDownOpening += (_, _) =>
                     {
                         monItem.DropDownItems.Clear();
 
-                        // 安全ガード
                         if (monitorIndex < 0 || monitorIndex >= _historyPerMonitor.Length)
                         {
                             monItem.DropDownItems.Add("(なし)");
@@ -161,7 +164,10 @@ namespace at365.WallpaperSlideshow
                         }
 
                         foreach (var path in list)
-                            monItem.DropDownItems.Add(CreateThumbnailMenuItem(path));
+                        {
+                            var menuItem = CreateThumbnailMenuItem(path, thumbnailCache);
+                            monItem.DropDownItems.Add(menuItem);
+                        }
                     };
                 }
             };
@@ -180,14 +186,32 @@ namespace at365.WallpaperSlideshow
             _cachedScreens = null;
 
             var screens = StableScreens;
-
-            _historyPerMonitor = new List<string>[screens.Length];
-            for (int i = 0; i < screens.Length; i++)
-                _historyPerMonitor[i] = new List<string>();
-
-            for (int i = 0; i < screens.Length; i++)
+            if (_historyPerMonitor == null)
             {
-                _queues.Add(BuildQueueForMonitor(i));
+                _historyPerMonitor = new List<string>[screens.Length];
+                for (int i = 0; i < screens.Length; i++)
+                    _historyPerMonitor[i] = new List<string>();
+            }
+            else if (_historyPerMonitor.Length < screens.Length)
+            {
+                var newHist = new List<string>[screens.Length];
+                for (int i = 0; i < screens.Length; i++)
+                {
+                    if (i < _historyPerMonitor.Length)
+                        newHist[i] = _historyPerMonitor[i];
+                    else
+                        newHist[i] = new List<string>();
+                }
+                _historyPerMonitor = newHist;
+            }
+
+            while (_queues.Count < screens.Length)
+            {
+                _queues.Add(BuildQueueForMonitor(_queues.Count));
+            }
+
+            while (_lastImages.Count < screens.Length)
+            {
                 _lastImages.Add(null);
             }
         }
@@ -461,21 +485,8 @@ namespace at365.WallpaperSlideshow
             return name.Substring(0, allowed) + "..." + ext;
         }
 
-        private static (string sizeText, string resolutionText) GetImageInfo(string path)
+        private static ToolStripMenuItem CreateThumbnailMenuItem(string path, Dictionary<string, (Image? img, string? size, string? res)> cache)
         {
-            var fi = new FileInfo(path);
-            string sizeText = $"{fi.Length / 1024f / 1024f:0.00} MB";
-
-            using var img = Image.FromFile(path);
-            string resolutionText = $"{img.Width}×{img.Height}";
-
-            return (sizeText, resolutionText);
-        }
-
-        private static ToolStripMenuItem CreateThumbnailMenuItem(string path)
-        {
-            var (sizeText, resolutionText) = GetImageInfo(path);
-
             var panel = new Panel
             {
                 Width = 240,
@@ -488,12 +499,12 @@ namespace at365.WallpaperSlideshow
                 Width = 160,
                 Height = 160,
                 SizeMode = PictureBoxSizeMode.Zoom,
-                Image = LoadImageWithoutLock(path),
+                Image = null
             };
 
             var labelSize = new Label
             {
-                Text = sizeText,
+                Text = "",
                 AutoSize = false,
                 Width = 240,
                 Height = 18,
@@ -503,7 +514,7 @@ namespace at365.WallpaperSlideshow
 
             var labelRes = new Label
             {
-                Text = resolutionText,
+                Text = "",
                 AutoSize = false,
                 Width = 240,
                 Height = 18,
@@ -517,32 +528,73 @@ namespace at365.WallpaperSlideshow
 
             pb.Top = 0;
             pb.Left = (panel.Width - pb.Width) / 2;
-
             labelSize.Top = pb.Bottom + 2;
             labelRes.Top = labelSize.Bottom;
 
-            var toolTip = new ToolTip();
-            toolTip.SetToolTip(panel, path);
-            toolTip.SetToolTip(pb, path);
-            toolTip.SetToolTip(labelSize, path);
-            toolTip.SetToolTip(labelRes, path);
-
             var host = new ToolStripControlHost(panel);
+            var parent = new ToolStripMenuItem(Truncate(Path.GetFileName(path), 25));
+            parent.DropDownItems.Add(host);
+
+            parent.DropDownOpened += (_, _) =>
+            {
+                if (!File.Exists(path))
+                {
+                    pb.Image = null;
+                    labelSize.Text = "(ファイルが存在しません)";
+                    labelRes.Text = "";
+                    return;
+                }
+
+                if (!cache.TryGetValue(path, out var info))
+                {
+                    Image? img = null;
+                    string sizeText = "";
+                    string resText = "";
+
+                    try
+                    {
+                        img = LoadImageWithoutLock(path);
+                    }
+                    catch { }
+
+                    try
+                    {
+                        var fi = new FileInfo(path);
+                        sizeText = $"{fi.Length / 1024f / 1024f:0.00} MB";
+                    }
+                    catch { }
+
+                    try
+                    {
+                        using var tmp = LoadImageWithoutLock(path);
+                        resText = $"{tmp.Width}×{tmp.Height}";
+                    }
+                    catch { }
+
+                    info = (img, sizeText, resText);
+                    cache[path] = info;
+                }
+
+                pb.Image = info.img;
+                labelSize.Text = info.size;
+                labelRes.Text = info.res;
+            };
+
+            parent.Click += (_, _) => OpenImage(path);
             host.Click += (_, _) => OpenImage(path);
             panel.Click += (_, _) => OpenImage(path);
             pb.Click += (_, _) => OpenImage(path);
             labelSize.Click += (_, _) => OpenImage(path);
             labelRes.Click += (_, _) => OpenImage(path);
 
-            // 中間メニューはファイル名（50文字制限）
-            var parent = new ToolStripMenuItem(Truncate(Path.GetFileName(path), 50));
-            parent.DropDownItems.Add(host);
-
             return parent;
         }
 
+
         private static void OpenImage(string path)
         {
+            if (!File.Exists(path)) return;
+
             try
             {
                 string normalized = path.Replace('/', '\\').Replace("\\\\", "\\").Trim();
