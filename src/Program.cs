@@ -14,12 +14,10 @@ namespace at365.WallpaperSlideshow
         private const uint SPIF_UPDATEINIFILE = 0x01;
         private const uint SPIF_SENDCHANGE = 0x02;
 
-        private static bool _paused = false;
-        private static NotifyIcon? _notifyIcon;
-        private static Icon? _iconRunning;
-        private static Icon? _iconPaused;
+        private static TrayIconManager? _tray;
 
         private static System.Threading.Timer? _timer;
+        private static bool _paused = false;
 
         private static Config _config = new();
         private static List<Queue<string>> _queues = new();
@@ -27,13 +25,11 @@ namespace at365.WallpaperSlideshow
 
         private static List<string>[] _historyPerMonitor = Array.Empty<List<string>>();
 
-        private static Screen[]? _cachedScreens;
-        private static readonly object _screenLock = new();
-
         private static FolderWatcher? _folderWatcher;
         private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
 
         private static Rectangle[]? _lastMonitorBounds;
+        private static Screen[]? _cachedScreens;
         public static Screen[] StableScreens => _cachedScreens ??= Screen.AllScreens.OrderBy(s => s.Bounds.Left).ThenBy(s => s.Bounds.Top).ToArray();
 
         [STAThread]
@@ -49,11 +45,16 @@ namespace at365.WallpaperSlideshow
             Application.SetCompatibleTextRenderingDefault(false);
 
             InitializeApplication();
-            SetupNotifyIcon();
 
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
             SystemEvents.SessionSwitch += OnSessionSwitch;
 
+            _tray = new TrayIconManager(
+                getPausedState: () => _paused,
+                togglePause: () => TogglePause(),
+                openDataFolder: () => OpenDataFolder(),
+                createHistoryMenu: () => CreateHistoryRootMenu()
+            );
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), () => InitializeApplication(true));
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, _config.IntervalSeconds * 1000, _config.IntervalSeconds * 1000);
 
@@ -97,84 +98,6 @@ namespace at365.WallpaperSlideshow
                 key.SetValue("WallpaperStyle", "22");
                 key.SetValue("TileWallpaper", "0");
             }
-        }
-
-        private static void SetupNotifyIcon()
-        {
-            _iconRunning = new Icon("running.ico");
-            _iconPaused = new Icon("paused.ico");
-            _notifyIcon = new NotifyIcon
-            {
-                Icon = _iconRunning,
-                Text = "WallpaperSlideshow.at365",
-                Visible = true
-            };
-            _notifyIcon.MouseClick += (s, e) =>
-            {
-                if (e.Button == MouseButtons.Left)
-                    TogglePause();
-            };
-
-            var contextMenu = new ContextMenuStrip();
-
-            var openDataFolderItem = new ToolStripMenuItem("データフォルダを開く(&D)");
-            openDataFolderItem.Click += (_, _) => OpenDataFolder();
-            contextMenu.Items.Add(openDataFolderItem);
-
-            var historyRoot = new ToolStripMenuItem("最近使った壁紙(&R)");
-            contextMenu.Items.Add(historyRoot);
-
-            historyRoot.DropDownOpening += (_, _) =>
-            {
-                historyRoot.DropDownItems.Clear();
-
-                if (_historyPerMonitor == null ||
-                    _historyPerMonitor.Length != StableScreens.Length)
-                {
-                    _historyPerMonitor = new List<string>[StableScreens.Length];
-                    for (int j = 0; j < _historyPerMonitor.Length; j++)
-                        _historyPerMonitor[j] = new List<string>();
-                }
-
-                var thumbnailCache = new Dictionary<string, (Image? img, string? size, string? res)>();
-                for (int i = 0; i < _historyPerMonitor.Length; i++)
-                {
-                    int monitorIndex = i;
-
-                    var monItem = new ToolStripMenuItem($"{monitorIndex + 1}: ");
-                    historyRoot.DropDownItems.Add(monItem);
-
-                    monItem.DropDownOpening += (_, _) =>
-                    {
-                        monItem.DropDownItems.Clear();
-
-                        if (monitorIndex < 0 || monitorIndex >= _historyPerMonitor.Length)
-                        {
-                            monItem.DropDownItems.Add("(なし)");
-                            return;
-                        }
-
-                        var list = _historyPerMonitor[monitorIndex];
-                        if (list == null || list.Count == 0)
-                        {
-                            monItem.DropDownItems.Add("(なし)");
-                            return;
-                        }
-
-                        foreach (var path in list)
-                        {
-                            var menuItem = CreateThumbnailMenuItem(path, thumbnailCache);
-                            monItem.DropDownItems.Add(menuItem);
-                        }
-                    };
-                }
-            };
-
-            var exitItem = new ToolStripMenuItem("終了(&X)");
-            exitItem.Click += (_, _) => ApplicationShutdown();
-            contextMenu.Items.Add(exitItem);
-            _notifyIcon.ContextMenuStrip = contextMenu;
-            _notifyIcon.Visible = true;
         }
 
         private static void InitializeMonitorState()
@@ -598,13 +521,13 @@ namespace at365.WallpaperSlideshow
             {
                 _timer!.Change(0, _config.IntervalSeconds * 1000);
                 _paused = false;
-                _notifyIcon?.Icon = _iconRunning;
+                _tray?.UpdateIcon();
             }
             else
             {
                 _timer!.Change(Timeout.Infinite, Timeout.Infinite);
                 _paused = true;
-                _notifyIcon?.Icon = _iconPaused;
+                _tray?.UpdateIcon();
                 ApplyWallpaper();
             }
         }
@@ -625,8 +548,8 @@ namespace at365.WallpaperSlideshow
         internal static void ApplicationShutdown()
         {
             try { ApplyWallpaper(); } catch { }
-            try { _folderWatcher?.Dispose(); } catch { }
-            try { _notifyIcon?.Dispose(); } catch { }
+            try { _folderWatcher?.Dispose(); _folderWatcher = null; } catch { }
+            try { _tray?.Dispose(); _tray = null; } catch { }
             try { Application.Exit(); } catch { }
         }
 
@@ -675,6 +598,53 @@ namespace at365.WallpaperSlideshow
                 return "..." + ext;
 
             return name.Substring(0, allowed) + "..." + ext;
+        }
+
+        private static ToolStripMenuItem CreateHistoryRootMenu()
+        {
+            var root = new ToolStripMenuItem("最近使った壁紙(&R)");
+
+            root.DropDownOpening += (_, _) =>
+            {
+                root.DropDownItems.Clear();
+
+                if (_historyPerMonitor == null ||
+                    _historyPerMonitor.Length != StableScreens.Length)
+                {
+                    _historyPerMonitor = new List<string>[StableScreens.Length];
+                    for (int j = 0; j < _historyPerMonitor.Length; j++)
+                        _historyPerMonitor[j] = new List<string>();
+                }
+
+                var thumbnailCache = new Dictionary<string, (Image? img, string? size, string? res)>();
+
+                for (int i = 0; i < _historyPerMonitor.Length; i++)
+                {
+                    int monitorIndex = i;
+                    var monItem = new ToolStripMenuItem($"{monitorIndex + 1}: ");
+                    root.DropDownItems.Add(monItem);
+
+                    monItem.DropDownOpening += (_, _) =>
+                    {
+                        monItem.DropDownItems.Clear();
+
+                        var list = _historyPerMonitor[monitorIndex];
+                        if (list == null || list.Count == 0)
+                        {
+                            monItem.DropDownItems.Add("(なし)");
+                            return;
+                        }
+
+                        foreach (var path in list)
+                        {
+                            var menuItem = CreateThumbnailMenuItem(path, thumbnailCache);
+                            monItem.DropDownItems.Add(menuItem);
+                        }
+                    };
+                }
+            };
+
+            return root;
         }
 
         private static ToolStripMenuItem CreateThumbnailMenuItem(
