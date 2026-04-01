@@ -7,7 +7,6 @@ namespace at365.WallpaperSlideshow
 {
     public static class Program
     {
-        private static TrayIconManager? _tray;
         private static Config _config = new();
 
         private static System.Threading.Timer? _timer;
@@ -15,10 +14,8 @@ namespace at365.WallpaperSlideshow
         
         private static List<Queue<string>> _queues = new();
         private static List<string?> _lastImages = new();
-
         private static FolderWatcher? _folderWatcher;
         private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
-
         private static Rectangle[]? _lastMonitorBounds;
 
         [STAThread]
@@ -40,12 +37,13 @@ namespace at365.WallpaperSlideshow
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
             SystemEvents.SessionSwitch += OnSessionSwitch;
 
-            _tray = new TrayIconManager(
+            TrayIconManager.Instance.Initialize(
+                _config,
                 getPausedState: () => _paused,
                 togglePause: () => TogglePause(),
-                openDataFolder: OpenDataFolder,
-                createHistoryMenu: () => HistoryManager.Instance.CreateHistoryMenu()
+                createHistoryMenu: HistoryManager.Instance.CreateHistoryMenu
             );
+
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), () => InitializeApplication(true));
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, _config.IntervalSeconds * 1000, _config.IntervalSeconds * 1000);
 
@@ -215,13 +213,13 @@ namespace at365.WallpaperSlideshow
             {
                 _timer!.Change(0, _config.IntervalSeconds * 1000);
                 _paused = false;
-                _tray?.UpdateIcon();
+                TrayIconManager.Instance.UpdateIcon();
             }
             else
             {
                 _timer!.Change(Timeout.Infinite, Timeout.Infinite);
                 _paused = true;
-                _tray?.UpdateIcon();
+                TrayIconManager.Instance.UpdateIcon();
                 ApplyWallpaper();
             }
         }
@@ -243,7 +241,6 @@ namespace at365.WallpaperSlideshow
         {
             try { _timer?.Dispose(); } catch { }
             try { _folderWatcher?.Dispose(); _folderWatcher = null; } catch { }
-            try { _tray?.Dispose(); _tray = null; } catch { }
             try { ApplyWallpaper(); } catch { }
             try { Application.Exit(); } catch { }
         }
