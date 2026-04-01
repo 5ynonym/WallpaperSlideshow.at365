@@ -30,12 +30,17 @@
     { "Folder": "C:/Wallpapers/Monitor2", "Mode": "Fill" }
     { "Folder": "C:/Wallpapers/Monitor3", "Mode": "Fit" },
     { "Folder": "C:/Wallpapers/Monitor4", "Mode": "Center" }
-  ]
+  ],
+  "History": {
+    "Limit": 30,
+    "ThumbnailWidth": 480,
+    "ThumbnailHeight": 360,
+    "MaxFileNameLength": 30
+  },
 }
 ```
 
 - `IntervalSeconds`: 壁紙更新間隔（秒）
-- `TileCount`: Tileモードの表示枚数
 - `Monitors[n].Folder`: モニター n に使用する画像フォルダ
   - モニター順 n は左から右への順番 (Windowsのディスプレイ設定の順番とは必ずしも一致しない)
   - サブフォルダも含めた指定フォルダ配下の画像をランダムに壁紙に設定 (1巡するまで重複なし)
@@ -46,7 +51,11 @@
   - Stretch: アスペクト比無視で引き伸ばし
   - Center: 中央に等倍表示
   - Tile:   タイル表示
-
+- `History`: タスクトレイの履歴サムネイルの設定
+  - Limit: 履歴件数
+  - ThumbnailWidth: 履歴サムネイルの幅
+  - ThumbnailHeight: 履歴サムネイルの高さ
+  - MaxFileNameLength: 履歴ファイル名を省略する文字数
 ---
 
 ## 使い方
