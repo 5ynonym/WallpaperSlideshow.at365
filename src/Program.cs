@@ -484,19 +484,25 @@ namespace at365.WallpaperSlideshow
             return name.Substring(0, allowed) + "..." + ext;
         }
 
-        private static ToolStripMenuItem CreateThumbnailMenuItem(string path, Dictionary<string, (Image? img, string? size, string? res)> cache)
+        private const int ThumbnailWidth = 480;
+        private const int ThumbnailHeight = 360;
+        private const int MaxFileNameLength = 25;
+
+        private static ToolStripMenuItem CreateThumbnailMenuItem(
+            string path,
+            Dictionary<string, (Image? img, string? size, string? res)> cache)
         {
             var panel = new Panel
             {
-                Width = 240,
-                Height = 200,
+                Width = ThumbnailWidth + 80,
+                Height = ThumbnailHeight + 60,
                 Margin = new Padding(4)
             };
 
             var pb = new PictureBox
             {
-                Width = 160,
-                Height = 160,
+                Width = ThumbnailWidth,
+                Height = ThumbnailHeight,
                 SizeMode = PictureBoxSizeMode.Zoom,
                 Image = null
             };
@@ -505,7 +511,7 @@ namespace at365.WallpaperSlideshow
             {
                 Text = "",
                 AutoSize = false,
-                Width = 240,
+                Width = panel.Width,
                 Height = 18,
                 TextAlign = ContentAlignment.MiddleCenter,
                 ForeColor = Color.Gray
@@ -515,7 +521,7 @@ namespace at365.WallpaperSlideshow
             {
                 Text = "",
                 AutoSize = false,
-                Width = 240,
+                Width = panel.Width,
                 Height = 18,
                 TextAlign = ContentAlignment.MiddleCenter,
                 ForeColor = Color.Gray
@@ -527,12 +533,19 @@ namespace at365.WallpaperSlideshow
 
             pb.Top = 0;
             pb.Left = (panel.Width - pb.Width) / 2;
-            labelSize.Top = pb.Bottom + 2;
+            labelSize.Top = pb.Bottom + 4;
             labelRes.Top = labelSize.Bottom;
 
             var host = new ToolStripControlHost(panel);
-            var parent = new ToolStripMenuItem(Truncate(Path.GetFileName(path), 25));
+
+            var parent = new ToolStripMenuItem(Truncate(Path.GetFileName(path), MaxFileNameLength));
             parent.DropDownItems.Add(host);
+
+            var tt = new ToolTip();
+            tt.SetToolTip(pb, path);
+            tt.SetToolTip(labelSize, path);
+            tt.SetToolTip(labelRes, path);
+            tt.SetToolTip(panel, path);
 
             parent.DropDownOpened += (_, _) =>
             {
@@ -550,19 +563,13 @@ namespace at365.WallpaperSlideshow
                     string sizeText = "";
                     string resText = "";
 
-                    try
-                    {
-                        img = LoadImageWithoutLock(path);
-                    }
-                    catch { }
-
+                    try { img = LoadImageWithoutLock(path); } catch { }
                     try
                     {
                         var fi = new FileInfo(path);
                         sizeText = $"{fi.Length / 1024f / 1024f:0.00} MB";
                     }
                     catch { }
-
                     try
                     {
                         using var tmp = LoadImageWithoutLock(path);
@@ -579,7 +586,12 @@ namespace at365.WallpaperSlideshow
                 labelRes.Text = info.res;
             };
 
-            parent.Click += (_, _) => OpenImage(path);
+            parent.Click += (_, _) =>
+            {
+                if (File.Exists(path))
+                    OpenImage(path);
+            };
+
             host.Click += (_, _) => OpenImage(path);
             panel.Click += (_, _) => OpenImage(path);
             pb.Click += (_, _) => OpenImage(path);
@@ -588,7 +600,6 @@ namespace at365.WallpaperSlideshow
 
             return parent;
         }
-
 
         private static void OpenImage(string path)
         {
