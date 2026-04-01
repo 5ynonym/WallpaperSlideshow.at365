@@ -243,6 +243,7 @@ namespace at365.WallpaperSlideshow
 
             string?[] monitorImages = new string?[screens.Length];
 
+            Rectangle virtualBounds = Rectangle.Empty;
             for (int i = 0; i < screens.Length; i++)
             {
                 if (_queues[i].Count == 0)
@@ -261,11 +262,8 @@ namespace at365.WallpaperSlideshow
 
                 var image = _queues[i].Count > 0 ? _queues[i].Dequeue() : null;
                 _lastImages[i] = monitorImages[i] = image;
+                virtualBounds = Rectangle.Union(virtualBounds, screens[i].Bounds);
             }
-
-            Rectangle virtualBounds = Rectangle.Empty;
-            foreach (var screen in screens)
-                virtualBounds = Rectangle.Union(virtualBounds, screen.Bounds);
 
             using var bmp = new Bitmap(virtualBounds.Width, virtualBounds.Height);
             using var gMain = Graphics.FromImage(bmp);
@@ -290,18 +288,20 @@ namespace at365.WallpaperSlideshow
                 return;
             }
 
+            var monitorConfig = (monitorIndex < _config.Monitors.Count)
+                ? _config.Monitors[monitorIndex]
+                : new MonitorConfig();
+
             var screen = screens[monitorIndex];
             var bounds = screen.Bounds;
-
             var drawRect = new Rectangle(
-                bounds.Left - virtualBounds.Left,
-                bounds.Top - virtualBounds.Top,
-                bounds.Width,
-                bounds.Height
+                bounds.Left - virtualBounds.Left + monitorConfig.PaddingLeft,
+                bounds.Top - virtualBounds.Top + monitorConfig.PaddingTop,
+                bounds.Width - monitorConfig.PaddingLeft - monitorConfig.PaddingRight,
+                bounds.Height - monitorConfig.PaddingTop - monitorConfig.PaddingBottom
             );
 
-            var mode = (monitorIndex < _config.Monitors.Count) ? _config.Monitors[monitorIndex].Mode : StretchMode.Fit;
-
+            var mode = monitorConfig.Mode ?? StretchMode.Fit;
             if (mode == StretchMode.Tile)
             {
                 if (monitorImage == null)
@@ -323,7 +323,7 @@ namespace at365.WallpaperSlideshow
                     }
                 }
 
-                var imgs = paths.Select(p => Image.FromFile(p)).ToArray();
+                var imgs = paths.Select(p => LoadImageWithoutLock(p)).ToArray();
                 DrawTile(gMain, imgs, drawRect);
 
                 foreach (var im in imgs)
@@ -342,8 +342,8 @@ namespace at365.WallpaperSlideshow
 
                 try
                 {
-                    using var img = Image.FromFile(monitorImage);
-                    DrawImageWithMode(gMain, img, drawRect, mode ?? StretchMode.Fit);
+                    using var img = LoadImageWithoutLock(monitorImage);
+                    DrawImageWithMode(gMain, img, drawRect, mode);
                     PushHistory(monitorIndex, monitorImage);
                 }
                 catch

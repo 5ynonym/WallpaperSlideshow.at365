@@ -16,6 +16,10 @@ namespace at365.WallpaperSlideshow
     {
         public string? Folder { get; set; }
         public StretchMode? Mode { get; set; } = StretchMode.Fit;
+        public int PaddingLeft { get; set; } = 0;
+        public int PaddingRight { get; set; } = 0;
+        public int PaddingTop { get; set; } = 0;
+        public int PaddingBottom { get; set; } = 0;
     }
 
     public class HistoryConfig
