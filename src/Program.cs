@@ -45,20 +45,18 @@ namespace at365.WallpaperSlideshow
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            
-            SetupNotifyIcon();
-            InitializeMonitorState();
 
-            static void handleRequiredInitialize()
-            {
-                InitializeMonitorState();
-                UpdateWallpaper(); ;
-            }
-            SystemEvents.DisplaySettingsChanged += (_, _) => Application.OpenForms[0]?.BeginInvoke(handleRequiredInitialize);
-            _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), handleRequiredInitialize);
+            var wndProcForm = new WndProcForm();
+            var handle = wndProcForm.Handle;
+
+            InitializeApplication();
+            SetupNotifyIcon();
+
+            SystemEvents.DisplaySettingsChanged += (_, _) => Application.OpenForms[0]?.BeginInvoke(InitializeApplication);
+            _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), InitializeApplication);
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
 
-            Application.Run();
+            Application.Run(wndProcForm);
         }
 
         private static void EnsureSingleInstance()
@@ -106,6 +104,12 @@ namespace at365.WallpaperSlideshow
             contextMenu.Items.Add(exitItem);
             _notifyIcon.ContextMenuStrip = contextMenu;
             _notifyIcon.Visible = true;
+        }
+
+        internal static void InitializeApplication()
+        {
+            InitializeMonitorState();
+            UpdateWallpaper();
         }
 
         private static void InitializeMonitorState()
@@ -274,29 +278,35 @@ namespace at365.WallpaperSlideshow
             return list.OrderBy(_ => Random.Shared.Next()).ToList();
         }
 
-        private static void TogglePause()
+        internal static void TogglePause(bool? forceState = null)
         {
-            if (_paused)
+            bool target = forceState ?? !_paused;
+
+            if (!target)
             {
                 _timer!.Change(0, _config.IntervalSeconds * 1000);
                 _paused = false;
                 _notifyIcon?.Icon = _iconRunning;
-                
             }
             else
             {
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
                 _timer!.Change(Timeout.Infinite, Timeout.Infinite);
                 _paused = true;
                 _notifyIcon?.Icon = _iconPaused;
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
         }
 
-        private static void ApplicationShutdown()
+        internal static void ApplicationShutdown()
         {
-            try { SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE); } catch { }
+            try
+            {
+                OverwriteWithBlack(TempPath);
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            }
+            catch { }
             try { _folderWatcher?.Dispose(); } catch { }
-            try { _notifyIcon?.Dispose();} catch { }
+            try { _notifyIcon?.Dispose(); } catch { }
             try { Application.Exit(); } catch { }
         }
 
