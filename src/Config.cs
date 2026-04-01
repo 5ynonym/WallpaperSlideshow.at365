@@ -35,6 +35,7 @@ namespace at365.WallpaperSlideshow
     {
         public int IntervalSeconds { get; set; } = 60;
         public HistoryConfig History { get; set; } = new HistoryConfig();
+        public float TileMargin { get; set; } = 10;
         public List<MonitorConfig> Monitors { get; set; } = new();
 
         public static Config? LoadConfig()

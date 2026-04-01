@@ -30,7 +30,7 @@ namespace at365.WallpaperSlideshow
         [STAThread]
         public static void Main(string[] args)
         {
-            _config = Config.LoadConfig();
+            _config = Config.LoadConfig()!;
             if (_config == null) return;
 
             EnsureSingleInstance();
@@ -47,8 +47,8 @@ namespace at365.WallpaperSlideshow
             _tray = new TrayIconManager(
                 getPausedState: () => _paused,
                 togglePause: () => TogglePause(),
-                openDataFolder: () => OpenDataFolder(),
-                createHistoryMenu: () => CreateHistoryRootMenu()
+                openDataFolder: OpenDataFolder,
+                createHistoryMenu: CreateHistoryRootMenu
             );
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), () => InitializeApplication(true));
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, _config.IntervalSeconds * 1000, _config.IntervalSeconds * 1000);
@@ -210,10 +210,7 @@ namespace at365.WallpaperSlideshow
         private static void ComposeWallpaperForMonitor(int monitorIndex, string? monitorImage, Graphics gMain, Rectangle virtualBounds)
         {
             var screens = StableScreens;
-            if (monitorIndex < 0 || monitorIndex >= screens.Length)
-            {
-                return;
-            }
+            if (monitorIndex < 0 || monitorIndex >= screens.Length) return;
 
             var monitorConfig = (monitorIndex < _config.Monitors.Count)
                 ? _config.Monitors[monitorIndex]
@@ -250,7 +247,7 @@ namespace at365.WallpaperSlideshow
                     }
                 }
 
-                var imgs = paths.Select(p => LoadImageWithoutLock(p)).ToArray();
+                var imgs = paths.Select(LoadImageWithoutLock).ToArray();
                 DrawTile(gMain, imgs, drawRect);
 
                 foreach (var im in imgs)
@@ -345,19 +342,17 @@ namespace at365.WallpaperSlideshow
                     }
             }
         }
-        private const float VisualMargin = 5f; // 左右上下に 5px ずつ → 画像間は実質 10px
 
         private static void DrawTile(Graphics g, Image[] images, Rectangle rect)
         {
             int bestRows = -1;
             float bestScore = float.MaxValue;
-            Image[][] bestSplit = null;
-            float[] bestHeights = null;
+            Image[][]? bestSplit = null;
+            float[]? bestHeights = null;
 
             for (int rowCount = 1; rowCount <= images.Length; rowCount++)
             {
                 var rows = SplitRowsAspectBalanced(images, rowCount);
-
                 float[] heights = new float[rowCount];
                 bool ok = true;
 
@@ -407,7 +402,7 @@ namespace at365.WallpaperSlideshow
                 }
             }
 
-            if (bestRows < 0)
+            if (bestRows < 0 || bestSplit == null || bestHeights == null)
                 return;
 
             for (int r = 0; r < bestRows; r++)
@@ -482,7 +477,8 @@ namespace at365.WallpaperSlideshow
             {
                 float w = widths[i];
                 var layoutRect = new RectangleF(x, y, w, rowHeight);
-                var inner = RectangleF.Inflate(layoutRect, -VisualMargin, -VisualMargin);
+                var margin = _config.TileMargin / 2;
+                var inner = RectangleF.Inflate(layoutRect, -margin, -margin);
 
                 DrawImageFit(g, row[i], Rectangle.Round(inner));
                 x += w + gapX;
@@ -551,9 +547,10 @@ namespace at365.WallpaperSlideshow
 
         internal static void ApplicationShutdown()
         {
-            try { ApplyWallpaper(); } catch { }
+            try { _timer?.Dispose(); } catch { }
             try { _folderWatcher?.Dispose(); _folderWatcher = null; } catch { }
             try { _tray?.Dispose(); _tray = null; } catch { }
+            try { ApplyWallpaper(); } catch { }
             try { Application.Exit(); } catch { }
         }
 
