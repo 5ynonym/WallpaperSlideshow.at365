@@ -23,8 +23,10 @@ namespace at365.WallpaperSlideshow
 
             _config = Config.LoadConfig()!;
             if (_config == null) return;
+
             WallpaperRenderer.Instance.SetConfig(_config);
             HistoryManager.Instance.SetConfig(_config);
+            WallpaperController.Instance.Initialize(_config);
 
             SetWallpaperSpanMode();
             Application.EnableVisualStyles();
@@ -43,7 +45,9 @@ namespace at365.WallpaperSlideshow
             );
 
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), () => InitializeApplication(true));
-            _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, _config.IntervalSeconds * 1000, _config.IntervalSeconds * 1000);
+            _timer = new System.Threading.Timer(
+                _ => WallpaperController.Instance.UpdateWallpaper(),
+                null, _config.IntervalSeconds * 1000, _config.IntervalSeconds * 1000);
 
             Application.Run();
 
@@ -102,62 +106,7 @@ namespace at365.WallpaperSlideshow
                 return;
 
             InitializeMonitorState();
-            UpdateWallpaper();
-        }
-
-        private static void UpdateWallpaper()
-        {
-            if (_paused) return;
-
-            var screens = StableScreensProvider.Screens;
-            string?[] monitorImages = new string?[screens.Length];
-            Rectangle virtualBounds = Rectangle.Empty;
-            for (int i = 0; i < screens.Length; i++)
-            {
-                var image = QueueManager.Instance.GetNextImage(i);
-                monitorImages[i] = image;
-                virtualBounds = Rectangle.Union(virtualBounds, screens[i].Bounds);
-            }
-
-            using var bmp = new Bitmap(virtualBounds.Width, virtualBounds.Height);
-            using var gMain = Graphics.FromImage(bmp);
-            gMain.FillRectangle(Brushes.Black, new Rectangle(0, 0, bmp.Width, bmp.Height));
-
-            for (int i = 0; i < screens.Length; i++)
-            {
-                WallpaperRenderer.Instance.ComposeMonitor(
-                    i,
-                    monitorImages[i],
-                    gMain,
-                    virtualBounds,
-                    screens,
-                    QueueManager.Instance.GetQueue(i),
-                    (mon, path) => HistoryManager.Instance.Push(mon, path, _config.History.Limit)
-                );
-            }
-
-            try { bmp.Save(Const.WallpaperPicturePath, ImageFormat.Bmp); } catch { }
-
-            ApplyWallpaper();
-            WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
-        }
-
-        private static Queue<string> BuildQueueForMonitor(int index)
-        {
-            string? folder = (index < _config.Monitors.Count) ? _config.Monitors[index].Folder : null;
-            List<string> files = new();
-            if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
-            {
-                try
-                {
-                    files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
-                        .Where(f => ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                        .ToList();
-                }
-                catch { }
-            }
-
-            return new Queue<string>(WallpaperRenderer.Instance.Shuffle(files));
+            WallpaperController.Instance.UpdateWallpaper();
         }
 
         private static float AdjustHeight(Image[] row, int totalWidth, float h)
@@ -192,19 +141,6 @@ namespace at365.WallpaperSlideshow
                 TrayIconManager.Instance.UpdateIcon();
                 ApplyWallpaper();
             }
-        }
-
-        private static void OpenDataFolder()
-        {
-            try
-            {
-                string dataPath = Const.AppDataFolder;
-                if (!Directory.Exists(Const.AppDataFolder))
-                    Directory.CreateDirectory(Const.AppDataFolder);
-
-                Process.Start("explorer.exe", Const.AppDataFolder);
-            }
-            catch { }
         }
 
         internal static void ApplicationShutdown()
