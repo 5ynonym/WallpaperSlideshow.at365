@@ -1,32 +1,33 @@
 {
   "IntervalSeconds": 10,
-  "History": {
-    "Limit": 30,
-    "ThumbnailWidth": 480,
-    "ThumbnailHeight": 360,
-    "MaxFileNameLength":  30
-  },
-  "TileCount": 8,
   "Monitors": [
     {
       "Folder": "C:/Wallpapers/16-9",
-      "Mode": "Fit",
+      "Mode": "Tile",
+      "TileCount": 4,
       "PaddingLeft": 0,
       "PaddingRight": 0,
       "PaddingTop": 0,
       "PaddingBottom": 40
     },
     {
-      "Folder": "",
-      "Mode": "Fill"
+      "Folder": "C:/Wallpapers/Monitor2",
+      "Mode": "Fit"
     },
     {
-      "Folder": "",
+      "Folder": "C:/Wallpapers/Monitor3",
+      "Mode": "Tile",
+      "TileCount": 13
+    },
+    {
+      "Folder": "C:/Wallpapers/Monitor4",
       "Mode": "Center"
-    },
-    {
-      "Folder": "",
-      "Mode": "Tile"
     }
-  ]
+  ],
+  "History": {
+    "Limit": 30,
+    "ThumbnailWidth": 480,
+    "ThumbnailHeight": 360,
+    "MaxFileNameLength": 30
+  }
 }

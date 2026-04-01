@@ -229,7 +229,7 @@ namespace at365.WallpaperSlideshow
             var list = _historyPerMonitor[monitor];
             list.Insert(0, imagePath);
 
-            if (list.Count > Math.Max(_config.History.Limit, _config.TileCount))
+            if (list.Count > _config.History.Limit)
                 list.RemoveAt(list.Count - 1);
         }
 
@@ -313,7 +313,7 @@ namespace at365.WallpaperSlideshow
                 var paths = new List<string> { monitorImage };
                 PushHistory(monitorIndex, monitorImage);
 
-                while (paths.Count < _config.TileCount && _queues[monitorIndex].Count > 0)
+                while (paths.Count < monitorConfig.TileCount && _queues[monitorIndex].Count > 0)
                 {
                     var next = _queues[monitorIndex].Dequeue();
                     if (next != null)

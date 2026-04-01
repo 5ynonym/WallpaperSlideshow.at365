@@ -16,6 +16,7 @@ namespace at365.WallpaperSlideshow
     {
         public string? Folder { get; set; }
         public StretchMode? Mode { get; set; } = StretchMode.Fit;
+        public int TileCount { get; set; } = 4;
         public int PaddingLeft { get; set; } = 0;
         public int PaddingRight { get; set; } = 0;
         public int PaddingTop { get; set; } = 0;
@@ -34,7 +35,6 @@ namespace at365.WallpaperSlideshow
     {
         public int IntervalSeconds { get; set; } = 60;
         public HistoryConfig History { get; set; } = new HistoryConfig();
-        public int TileCount { get; set; } = 8;
         public List<MonitorConfig> Monitors { get; set; } = new();
 
         public static Config? LoadConfig()
