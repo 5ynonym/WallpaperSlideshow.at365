@@ -52,7 +52,7 @@ namespace at365.WallpaperSlideshow
             InitializeApplication();
             SetupNotifyIcon();
 
-            SystemEvents.DisplaySettingsChanged += (_, _) => Application.OpenForms[0]?.BeginInvoke(InitializeApplication);
+            SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), InitializeApplication);
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, 0, _config.IntervalSeconds * 1000);
 
@@ -77,8 +77,8 @@ namespace at365.WallpaperSlideshow
             using var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\\Desktop", true);
             if (key != null)
             {
-                key.SetValue("WallpaperStyle", "22"); // 画像
-                key.SetValue("TileWallpaper", "0"); // スパン
+                key.SetValue("WallpaperStyle", "22");
+                key.SetValue("TileWallpaper", "0");
             }
         }
 
@@ -178,7 +178,6 @@ namespace at365.WallpaperSlideshow
             return new Queue<string>(Shuffle(files));
         }
 
-
         private static void ComposeWallpaper(string?[] monitorImages, string path)
         {
             Rectangle virtualBounds = Rectangle.Empty;
@@ -202,12 +201,16 @@ namespace at365.WallpaperSlideshow
                 }
                 else
                 {
-                    using var img = Image.FromFile(monitorImages[i]!);
+                    Image? img = null;
+                    try { img = Image.FromFile(monitorImages[i]!); }
+                    catch { continue; } // 黒塗りにしてスキップ
+
                     var mode = (i < _config.Monitors.Count) ? _config.Monitors[i].Mode : null;
                     DrawImageWithMode(gMain, img, drawRect, mode ?? StretchMode.Fit);
                 }
             }
-            bmp.Save(path, ImageFormat.Jpeg);
+
+            try { bmp.Save(path, ImageFormat.Jpeg); } catch { }
         }
 
         private static void DrawImageWithMode(Graphics g, Image img, Rectangle drawRect, StretchMode mode)
@@ -266,9 +269,11 @@ namespace at365.WallpaperSlideshow
                 using var bmp = new Bitmap(1, 1);
                 using var g = Graphics.FromImage(bmp);
                 g.FillRectangle(Brushes.Black, new Rectangle(0, 0, 1, 1));
-                bmp.Save(emptyPicPath, ImageFormat.Jpeg);
+
+                try { bmp.Save(emptyPicPath, ImageFormat.Jpeg); } catch { }
             }
-            File.Copy(emptyPicPath, targetPath, overwrite: true);
+
+            try { File.Copy(emptyPicPath, targetPath, overwrite: true); } catch { }
         }
 
         private static List<string> Shuffle(List<string> list)

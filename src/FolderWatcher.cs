@@ -9,6 +9,8 @@
         private System.Threading.Timer? _debounceTimer;
         private const int DebounceMs = 500;
 
+        private bool _disposed = false;
+
         public FolderWatcher(IEnumerable<string?> folders, Action onChanged)
         {
             _onChanged = onChanged;
@@ -32,6 +34,7 @@
                 watcher.Created += OnFsEvent;
                 watcher.Deleted += OnFsEvent;
                 watcher.Renamed += OnFsEvent;
+                watcher.Error += (_, __) => { };
 
                 watcher.EnableRaisingEvents = true;
                 _watchers.Add(watcher);
@@ -40,22 +43,38 @@
 
         private void OnFsEvent(object sender, FileSystemEventArgs e)
         {
-            lock (_lock)
+            if (_disposed) return;
+
+            try
             {
-                _debounceTimer?.Dispose();
-                _debounceTimer = new System.Threading.Timer(_ =>
+                lock (_lock)
                 {
-                    _onChanged();
-                }, null, DebounceMs, Timeout.Infinite);
+                    if (_disposed) return;
+
+                    _debounceTimer ??= new System.Threading.Timer(_ =>
+                    {
+                        try { _onChanged(); }
+                        catch { }
+                    }, null, Timeout.Infinite, Timeout.Infinite);
+
+                    _debounceTimer.Change(DebounceMs, Timeout.Infinite);
+                }
             }
+            catch { }
         }
 
         public void Dispose()
         {
-            foreach (var w in _watchers)
-                w.Dispose();
+            _disposed = true;
 
-            _debounceTimer?.Dispose();
+            foreach (var w in _watchers)
+            {
+                try { w.Dispose(); }
+                catch { }
+            }
+
+            try { _debounceTimer?.Dispose(); }
+            catch { }
         }
     }
 }
