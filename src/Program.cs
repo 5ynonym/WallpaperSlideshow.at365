@@ -7,12 +7,7 @@ namespace at365.WallpaperSlideshow
 {
     public static class Program
     {
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, string pvParam, uint fWinIni);
 
-        private const uint SPI_SETDESKWALLPAPER = 0x0014;
-        private const uint SPIF_UPDATEINIFILE = 0x01;
-        private const uint SPIF_SENDCHANGE = 0x02;
 
         private static TrayIconManager? _tray;
 
@@ -23,7 +18,7 @@ namespace at365.WallpaperSlideshow
         private static List<Queue<string>> _queues = new();
         private static List<string?> _lastImages = new();
 
-        private static List<string>[] _historyPerMonitor = Array.Empty<List<string>>();
+        private static LinkedList<string>[] _historyPerMonitor = Array.Empty<LinkedList<string>>();
 
         private static FolderWatcher? _folderWatcher;
         private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
@@ -100,42 +95,49 @@ namespace at365.WallpaperSlideshow
             }
         }
 
+        private static void EnsureHistoryPerMonitor()
+        {
+            var screens = StableScreens;
+
+            if (_historyPerMonitor == null || _historyPerMonitor.Length == 0)
+            {
+                _historyPerMonitor = new LinkedList<string>[screens.Length];
+                for (int i = 0; i < screens.Length; i++)
+                    _historyPerMonitor[i] = new LinkedList<string>();
+                return;
+            }
+
+            if (_historyPerMonitor.Length < screens.Length)
+            {
+                var newHist = new LinkedList<string>[screens.Length];
+                for (int i = 0; i < screens.Length; i++)
+                {
+                    if (i < _historyPerMonitor.Length)
+                        newHist[i] = _historyPerMonitor[i];
+                    else
+                        newHist[i] = new LinkedList<string>();
+                }
+                _historyPerMonitor = newHist;
+            }
+        }
+
         private static void InitializeMonitorState()
         {
             _queues.Clear();
             _lastImages.Clear();
             _cachedScreens = null;
 
+            EnsureHistoryPerMonitor();
+
             var screens = StableScreens;
-            if (_historyPerMonitor == null)
-            {
-                _historyPerMonitor = new List<string>[screens.Length];
-                for (int i = 0; i < screens.Length; i++)
-                    _historyPerMonitor[i] = new List<string>();
-            }
-            else if (_historyPerMonitor.Length < screens.Length)
-            {
-                var newHist = new List<string>[screens.Length];
-                for (int i = 0; i < screens.Length; i++)
-                {
-                    if (i < _historyPerMonitor.Length)
-                        newHist[i] = _historyPerMonitor[i];
-                    else
-                        newHist[i] = new List<string>();
-                }
-                _historyPerMonitor = newHist;
-            }
 
             while (_queues.Count < screens.Length)
-            {
                 _queues.Add(BuildQueueForMonitor(_queues.Count));
-            }
 
             while (_lastImages.Count < screens.Length)
-            {
                 _lastImages.Add(null);
-            }
         }
+
 
         internal static void InitializeApplication(bool forceInitialize = false)
         {
@@ -149,11 +151,13 @@ namespace at365.WallpaperSlideshow
 
         private static void PushHistory(int monitor, string imagePath)
         {
+            EnsureHistoryPerMonitor();
+
             var list = _historyPerMonitor[monitor];
-            list.Insert(0, imagePath);
+            list.AddFirst(imagePath);
 
             if (list.Count > _config.History.Limit)
-                list.RemoveAt(list.Count - 1);
+                list.RemoveLast();
         }
 
         private static void UpdateWallpaper()
@@ -553,6 +557,12 @@ namespace at365.WallpaperSlideshow
             try { Application.Exit(); } catch { }
         }
 
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, string pvParam, uint fWinIni);
+        private const uint SPI_SETDESKWALLPAPER = 0x0014;
+        private const uint SPIF_UPDATEINIFILE = 0x01;
+        private const uint SPIF_SENDCHANGE = 0x02;
+
         private static void ApplyWallpaper()
         {
             try
@@ -607,14 +617,7 @@ namespace at365.WallpaperSlideshow
             root.DropDownOpening += (_, _) =>
             {
                 root.DropDownItems.Clear();
-
-                if (_historyPerMonitor == null ||
-                    _historyPerMonitor.Length != StableScreens.Length)
-                {
-                    _historyPerMonitor = new List<string>[StableScreens.Length];
-                    for (int j = 0; j < _historyPerMonitor.Length; j++)
-                        _historyPerMonitor[j] = new List<string>();
-                }
+                EnsureHistoryPerMonitor();
 
                 var thumbnailCache = new Dictionary<string, (Image? img, string? size, string? res)>();
 
