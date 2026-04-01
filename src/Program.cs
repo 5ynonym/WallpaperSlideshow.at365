@@ -32,6 +32,7 @@ namespace at365.WallpaperSlideshow
         private static FolderWatcher? _folderWatcher;
         private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
 
+        private static Rectangle[]? _lastMonitorBounds;
         public static Screen[] StableScreens => _cachedScreens ??= Screen.AllScreens.OrderBy(s => s.Bounds.Left).ThenBy(s => s.Bounds.Top).ToArray();
 
         [STAThread]
@@ -46,17 +47,32 @@ namespace at365.WallpaperSlideshow
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            var wndProcForm = new WndProcForm();
-            var handle = wndProcForm.Handle;
-
             InitializeApplication();
             SetupNotifyIcon();
 
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
-            _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), InitializeApplication);
+            SystemEvents.SessionSwitch += OnSessionSwitch;
+
+            _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), () => InitializeApplication(true));
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, _config.IntervalSeconds * 1000, _config.IntervalSeconds * 1000);
 
-            Application.Run(wndProcForm);
+            Application.Run();
+
+            static void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+            {
+                switch (e.Reason)
+                {
+                    case SessionSwitchReason.SessionLock:
+                    case SessionSwitchReason.RemoteDisconnect:
+                        TogglePause(true);
+                        break;
+
+                    case SessionSwitchReason.SessionUnlock:
+                    case SessionSwitchReason.RemoteConnect:
+                        TogglePause(false);
+                        break;
+                }
+            }
         }
 
         private static void EnsureSingleInstance()
@@ -128,6 +144,15 @@ namespace at365.WallpaperSlideshow
                 _queues.Add(BuildQueueForMonitor(i));
                 _lastImages.Add(null);
             }
+        }
+
+        internal static void InitializeApplication(bool forceInitialize  = false)
+        {
+            bool monitorChanged = HasMonitorConfigChanged();
+            if (!monitorChanged) return;
+
+            InitializeMonitorState();
+            UpdateWallpaper();
         }
 
         private static void UpdateWallpaper()
@@ -336,6 +361,30 @@ namespace at365.WallpaperSlideshow
                 SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
             catch { }
+        }
+
+        private static bool HasMonitorConfigChanged()
+        {
+            var screens = Screen.AllScreens.OrderBy(s => s.Bounds.Left).ThenBy(s => s.Bounds.Top).ToArray();
+            var bounds = screens.Select(s => s.Bounds).ToArray();
+
+            if (_lastMonitorBounds == null ||
+                _lastMonitorBounds.Length != bounds.Length)
+            {
+                _lastMonitorBounds = bounds;
+                return true;
+            }
+
+            for (int i = 0; i < bounds.Length; i++)
+            {
+                if (!_lastMonitorBounds[i].Equals(bounds[i]))
+                {
+                    _lastMonitorBounds = bounds;
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }
