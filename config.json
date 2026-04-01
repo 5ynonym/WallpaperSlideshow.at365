@@ -1,6 +1,11 @@
 {
   "IntervalSeconds": 10,
-  "HistoryLimit": 30,
+  "History": {
+    "Limit": 30,
+    "ThumbnailWidth": 480,
+    "ThumbnailHeight": 360,
+    "MaxFileNameLength":  30
+  },
   "TileCount": 8,
   "Monitors": [
     {

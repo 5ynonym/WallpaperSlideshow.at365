@@ -229,7 +229,7 @@ namespace at365.WallpaperSlideshow
             var list = _historyPerMonitor[monitor];
             list.Insert(0, imagePath);
 
-            if (list.Count > Math.Max(_config.HistoryLimit, _config.TileCount))
+            if (list.Count > Math.Max(_config.History.Limit, _config.TileCount))
                 list.RemoveAt(list.Count - 1);
         }
 
@@ -536,7 +536,6 @@ namespace at365.WallpaperSlideshow
             return AdjustHeight(row, totalWidth, h * 0.95f);
         }
 
-        // 段組みは隙間なしで計算 → 描画時にだけ見た目の余白を付ける
         private static void DrawRowNoOverlap_WithVisualMargin(Graphics g, Image[] row, Rectangle rect, float rowHeight, float y)
         {
             float[] widths = row.Select(im => (float)im.Width / im.Height * rowHeight).ToArray();
@@ -550,8 +549,6 @@ namespace at365.WallpaperSlideshow
             {
                 float w = widths[i];
                 var layoutRect = new RectangleF(x, y, w, rowHeight);
-
-                // 見た目の隙間：内側に 5px ずつ余白 → 画像間は実質 10px
                 var inner = RectangleF.Inflate(layoutRect, -VisualMargin, -VisualMargin);
 
                 DrawImageFit(g, row[i], Rectangle.Round(inner));
@@ -674,25 +671,24 @@ namespace at365.WallpaperSlideshow
             return name.Substring(0, allowed) + "..." + ext;
         }
 
-        private const int ThumbnailWidth = 480;
-        private const int ThumbnailHeight = 360;
-        private const int MaxFileNameLength = 25;
-
         private static ToolStripMenuItem CreateThumbnailMenuItem(
             string path,
             Dictionary<string, (Image? img, string? size, string? res)> cache)
         {
+            var thumbWidth = _config.History.ThumbnailWidth;
+            var thumbheight = _config.History.ThumbnailHeight;
+
             var panel = new Panel
             {
-                Width = ThumbnailWidth + 80,
-                Height = ThumbnailHeight + 60,
+                Width = thumbWidth + 80,
+                Height = thumbheight + 60,
                 Margin = new Padding(4)
             };
 
             var pb = new PictureBox
             {
-                Width = ThumbnailWidth,
-                Height = ThumbnailHeight,
+                Width = thumbWidth,
+                Height = thumbheight,
                 SizeMode = PictureBoxSizeMode.Zoom,
                 Image = null
             };
@@ -727,8 +723,7 @@ namespace at365.WallpaperSlideshow
             labelRes.Top = labelSize.Bottom;
 
             var host = new ToolStripControlHost(panel);
-
-            var parent = new ToolStripMenuItem(Truncate(Path.GetFileName(path), MaxFileNameLength));
+            var parent = new ToolStripMenuItem(Truncate(Path.GetFileName(path), _config.History.MaxFileNameLength));
             parent.DropDownItems.Add(host);
             parent.DropDownDirection = ToolStripDropDownDirection.Left;
 

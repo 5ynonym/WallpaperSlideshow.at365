@@ -18,10 +18,18 @@ namespace at365.WallpaperSlideshow
         public StretchMode? Mode { get; set; } = StretchMode.Fit;
     }
 
+    public class HistoryConfig
+    {
+        public int Limit { get; set; } = 30;
+        public int ThumbnailWidth { get; set; } = 480;
+        public int ThumbnailHeight { get; set; } = 360;
+        public int MaxFileNameLength { get; set; } = 30;
+    }
+
     public class Config
     {
         public int IntervalSeconds { get; set; } = 60;
-        public int HistoryLimit { get; set; } = 30;
+        public HistoryConfig History { get; set; } = new HistoryConfig();
         public int TileCount { get; set; } = 8;
         public List<MonitorConfig> Monitors { get; set; } = new();
 
