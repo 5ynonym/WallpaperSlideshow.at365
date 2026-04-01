@@ -1,16 +1,15 @@
 # WallpaperSlideshow365
 
-複数モニター環境向けの壁紙スライドショーアプリです。  
-各モニターごとに別フォルダの画像をランダムに選択し、  
-全モニターの全体を 1 枚の壁紙として合成して設定します。
+マルチモニター環境向けの壁紙スライドショーアプリです。  
 
-- タスクトレイ常駐。
-- 終了時に壁紙を真っ黒画像に戻す。
-- 画像フォルダを監視して画像の追加・削除を反映。
+- モニター単位で画像フォルダを指定。
+- サブフォルダを含めて画像を探してスライドショー。
+- 画像フォルダを監視して画像の追加・削除をリアルタイム反映。
+- タスクトレイ常駐・単機能・軽量
 
 ---
 
-## 📁 設定ファイル（config.json）
+## 設定ファイル（config.json）
 
 `%UserProfile%\AppData\Roaming\at365\WallpaperSlideshow\config.json` に配置される JSON ファイルが優先して読み込まれます。
 なければ、アプリケーションの実行ファイルと同じフォルダにある `config.json` が読み込まれます。
@@ -18,6 +17,16 @@
 ```json
 {
   "IntervalSeconds": 60,
+  "TileCount": 8,
+  "Monitors": [
+    {
+      "Folder": "C:/Wallpapers/16-9",
+      "Mode": "Fit",
+      "PaddingLeft": 0,
+      "PaddingRight": 0,
+      "PaddingTop": 0,
+      "PaddingBottom": 40
+    },
   "Monitors": [
     { "Folder": "C:/Wallpapers/Monitor1", "Mode": "Fit" },
     { "Folder": "C:/Wallpapers/Monitor2", "Mode": "Fill" }
@@ -26,6 +35,7 @@
 ```
 
 - `IntervalSeconds`: 壁紙更新間隔（秒）
+- `TileCount`: Tileモードの表示枚数
 - `Monitors[n].Folder`: モニター n に使用する画像フォルダ
   - モニター順 n は左から右への順番 (Windowsのディスプレイ設定の順番とは必ずしも一致しない)
   - サブフォルダも含めた指定フォルダ配下の画像をランダムに壁紙に設定 (1巡するまで重複なし)
@@ -35,10 +45,11 @@
   - Fit: 黒帯ありで収まるように (既定)
   - Stretch: アスペクト比無視で引き伸ばし
   - Center: 中央に等倍表示
+  - Tile:   タイル表示
 
 ---
 
-## ▶ 使い方
+## 使い方
 
 1. `config.json` を編集
 2. `WallpaperSlideshow365.exe` を実行  
