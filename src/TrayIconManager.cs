@@ -24,7 +24,7 @@ namespace at365.WallpaperSlideshow
         private TrayIconManager() { }
 
         // ------------------------------------------------------------
-        // 初期化（Program.cs から呼ぶ）
+        // 初期化
         // ------------------------------------------------------------
         public void Initialize(
             Config config,

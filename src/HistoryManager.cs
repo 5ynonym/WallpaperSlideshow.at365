@@ -4,9 +4,7 @@ namespace at365.WallpaperSlideshow
 {
     public sealed class HistoryManager
     {
-        private static readonly Lazy<HistoryManager> _lazy =
-            new(() => new HistoryManager());
-
+        private static readonly Lazy<HistoryManager> _lazy = new(() => new HistoryManager());
         public static HistoryManager Instance => _lazy.Value;
 
         private LinkedList<string>[] _history = Array.Empty<LinkedList<string>>();
