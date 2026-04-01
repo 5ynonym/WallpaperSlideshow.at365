@@ -483,6 +483,12 @@ namespace at365.WallpaperSlideshow
             if (bestRows < 0)
                 return;
 
+            for (int r = 0; r < bestRows; r++)
+            {
+                var arr = bestSplit[r].OrderBy(_ => Random.Shared.Next()).ToArray();
+                bestSplit[r] = arr;
+            }
+
             float totalHeightFinal = bestHeights.Sum();
             float gapY = (rect.Height - totalHeightFinal) / (bestRows + 1);
             if (gapY < 0) gapY = 0;
