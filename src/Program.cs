@@ -12,8 +12,6 @@ namespace at365.WallpaperSlideshow
         private static System.Threading.Timer? _timer;
         private static bool _paused = false;
         
-        private static List<Queue<string>> _queues = new();
-        private static List<string?> _lastImages = new();
         private static FolderWatcher? _folderWatcher;
         private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
         private static Rectangle[]? _lastMonitorBounds;
@@ -91,19 +89,10 @@ namespace at365.WallpaperSlideshow
 
         private static void InitializeMonitorState()
         {
-            _queues.Clear();
-            _lastImages.Clear();
             StableScreensProvider.Refresh();
-
-            var screens = StableScreensProvider.Screens;
-
-            HistoryManager.Instance.EnsureInitialized(screens);
-
-            while (_queues.Count < screens.Length)
-                _queues.Add(BuildQueueForMonitor(_queues.Count));
-
-            while (_lastImages.Count < screens.Length)
-                _lastImages.Add(null);
+            QueueManager.Instance.SetConfig(_config);
+            QueueManager.Instance.Initialize(StableScreensProvider.Screens);
+            HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
         }
 
         internal static void InitializeApplication(bool forceInitialize = false)
@@ -121,31 +110,12 @@ namespace at365.WallpaperSlideshow
             if (_paused) return;
 
             var screens = StableScreensProvider.Screens;
-
-            if (_queues.Count != screens.Length)
-                InitializeMonitorState();
-
             string?[] monitorImages = new string?[screens.Length];
-
             Rectangle virtualBounds = Rectangle.Empty;
             for (int i = 0; i < screens.Length; i++)
             {
-                if (_queues[i].Count == 0)
-                {
-                    _queues[i] = BuildQueueForMonitor(i);
-                    if (_lastImages[i] != null &&
-                        _queues[i].Count > 1 &&
-                        _queues[i].Peek() == _lastImages[i])
-                    {
-                        var arr = _queues[i].ToArray();
-                        int swapIndex = Random.Shared.Next(1, arr.Length);
-                        (arr[0], arr[swapIndex]) = (arr[swapIndex], arr[0]);
-                        _queues[i] = new Queue<string>(arr);
-                    }
-                }
-
-                var image = _queues[i].Count > 0 ? _queues[i].Dequeue() : null;
-                _lastImages[i] = monitorImages[i] = image;
+                var image = QueueManager.Instance.GetNextImage(i);
+                monitorImages[i] = image;
                 virtualBounds = Rectangle.Union(virtualBounds, screens[i].Bounds);
             }
 
@@ -161,7 +131,7 @@ namespace at365.WallpaperSlideshow
                     gMain,
                     virtualBounds,
                     screens,
-                    _queues[i],
+                    QueueManager.Instance.GetQueue(i),
                     (mon, path) => HistoryManager.Instance.Push(mon, path, _config.History.Limit)
                 );
             }
