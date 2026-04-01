@@ -8,10 +8,11 @@ namespace at365.WallpaperSlideshow
 {
     public sealed class ApplicationController : IDisposable
     {
-        private static readonly Lazy<ApplicationController> _lazy =
-            new(() => new ApplicationController());
-
         public static ApplicationController Instance => _lazy.Value;
+        private static readonly Lazy<ApplicationController> _lazy = new(() => new ApplicationController());
+
+        private FileSystemWatcher? _configWatcher;
+        private System.Threading.Timer? _configDebounce;
 
         private Config? _config;
         private bool _paused = false;
@@ -29,18 +30,10 @@ namespace at365.WallpaperSlideshow
         // ============================================================
         public void Initialize(Config config)
         {
-            _config = config;
-
             EnsureSingleInstance();
             SetWallpaperSpanMode();
 
-            // 各コンポーネントに Config を注入
-            WallpaperRenderer.Instance.SetConfig(config);
-            HistoryManager.Instance.SetConfig(config);
-            QueueManager.Instance.SetConfig(config);
-            WallpaperController.Instance.Initialize(config);
-
-            InitializeApplication();
+            ApplyConfig(config);
 
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
             SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -57,12 +50,38 @@ namespace at365.WallpaperSlideshow
                 () => InitializeApplication(true)
             );
 
-            _timer = new System.Threading.Timer(
-                _ => WallpaperController.Instance.UpdateWallpaper(),
-                null,
-                config.IntervalSeconds * 1000,
-                config.IntervalSeconds * 1000
-            );
+            SetupConfigWatcher();
+        }
+
+        private void ApplyConfig(Config config)
+        {
+            _config = config;
+
+            WallpaperRenderer.Instance.SetConfig(config);
+            HistoryManager.Instance.SetConfig(config);
+            QueueManager.Instance.SetConfig(config);
+            WallpaperController.Instance.Initialize(config);
+
+            if (_timer == null)
+            {
+                _timer = new System.Threading.Timer(
+                    _ => WallpaperController.Instance.UpdateWallpaper(),
+                    null,
+                    config.IntervalSeconds * 1000,
+                    config.IntervalSeconds * 1000
+                );
+            }
+            else
+            {
+                _timer.Change(
+                    config.IntervalSeconds * 1000,
+                    config.IntervalSeconds * 1000
+                );
+            }
+
+            QueueManager.Instance.Initialize(StableScreensProvider.Screens);
+            HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
+            WallpaperController.Instance.UpdateWallpaper();
         }
 
         // ============================================================
@@ -78,6 +97,42 @@ namespace at365.WallpaperSlideshow
             HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
 
             WallpaperController.Instance.UpdateWallpaper();
+        }
+
+        private void SetupConfigWatcher()
+        {
+            string configPath = Const.ConfigPath;
+            string dir = Path.GetDirectoryName(configPath)!;
+            string file = Path.GetFileName(configPath);
+
+            _configWatcher = new FileSystemWatcher(dir)
+            {
+                Filter = file,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
+            };
+
+            _configWatcher.Changed += (_, __) =>
+            {
+                _configDebounce?.Dispose();
+                _configDebounce = new System.Threading.Timer(_ =>
+                {
+                    ReloadConfig();
+                }, null, 500, Timeout.Infinite);
+            };
+
+            _configWatcher.EnableRaisingEvents = true;
+        }
+
+        private void ReloadConfig()
+        {
+            try
+            {
+                var newConfig = Config.LoadConfig();
+                if (newConfig == null) return;
+
+                ApplyConfig(newConfig);
+            }
+            catch { }
         }
 
         // ============================================================
