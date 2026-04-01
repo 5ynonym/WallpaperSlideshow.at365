@@ -540,6 +540,7 @@ namespace at365.WallpaperSlideshow
 
             var parent = new ToolStripMenuItem(Truncate(Path.GetFileName(path), MaxFileNameLength));
             parent.DropDownItems.Add(host);
+            parent.DropDownDirection = ToolStripDropDownDirection.Left;
 
             var tt = new ToolTip();
             tt.SetToolTip(pb, path);
