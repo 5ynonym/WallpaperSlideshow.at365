@@ -20,7 +20,6 @@ namespace at365.WallpaperSlideshow
         private static Icon? _iconPaused;
 
         private static System.Threading.Timer? _timer;
-        private static string TempPath => Const.WallpaperPicturePath;
 
         private static Config _config = new();
         private static List<Queue<string>> _queues = new();
@@ -269,10 +268,10 @@ namespace at365.WallpaperSlideshow
                 }
             }
 
-            ComposeWallpaper(monitorImages, TempPath);
+            ComposeWallpaper(monitorImages, Const.WallpaperPicturePath);
             ApplyWallpaper();
             // 設定した壁紙をすぐに黒で上書きしておく。これにより、次回以降の起動時に前回の壁紙が表示されるのを防止する。
-            OverwriteWithBlack(TempPath);
+            OverwriteWithBlack(Const.WallpaperPicturePath);
         }
 
         private static Queue<string> BuildQueueForMonitor(int index)
@@ -442,7 +441,7 @@ namespace at365.WallpaperSlideshow
         {
             try
             {
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, Const.WallpaperPicturePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
             catch { }
         }
