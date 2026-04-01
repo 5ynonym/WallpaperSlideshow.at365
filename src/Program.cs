@@ -18,14 +18,10 @@ namespace at365.WallpaperSlideshow
         private static List<Queue<string>> _queues = new();
         private static List<string?> _lastImages = new();
 
-        private static LinkedList<string>[] _historyPerMonitor = Array.Empty<LinkedList<string>>();
-
         private static FolderWatcher? _folderWatcher;
         private static readonly string[] ImageExts = [".jpg", ".jpeg", ".png", ".bmp"];
 
         private static Rectangle[]? _lastMonitorBounds;
-        private static Screen[]? _cachedScreens;
-        public static Screen[] StableScreens => _cachedScreens ??= Screen.AllScreens.OrderBy(s => s.Bounds.Left).ThenBy(s => s.Bounds.Top).ToArray();
 
         [STAThread]
         public static void Main(string[] args)
@@ -34,6 +30,7 @@ namespace at365.WallpaperSlideshow
             if (_config == null) return;
 
             EnsureSingleInstance();
+            HistoryManager.Instance.SetConfig(_config);
             SetWallpaperSpanMode();
 
             Application.EnableVisualStyles();
@@ -48,7 +45,7 @@ namespace at365.WallpaperSlideshow
                 getPausedState: () => _paused,
                 togglePause: () => TogglePause(),
                 openDataFolder: OpenDataFolder,
-                createHistoryMenu: CreateHistoryRootMenu
+                createHistoryMenu: () => HistoryManager.Instance.CreateHistoryMenu()
             );
             _folderWatcher = new FolderWatcher(_config.Monitors.Select(m => m.Folder), () => InitializeApplication(true));
             _timer = new System.Threading.Timer(_ => UpdateWallpaper(), null, _config.IntervalSeconds * 1000, _config.IntervalSeconds * 1000);
@@ -95,41 +92,15 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        private static void EnsureHistoryPerMonitor()
-        {
-            var screens = StableScreens;
-
-            if (_historyPerMonitor == null || _historyPerMonitor.Length == 0)
-            {
-                _historyPerMonitor = new LinkedList<string>[screens.Length];
-                for (int i = 0; i < screens.Length; i++)
-                    _historyPerMonitor[i] = new LinkedList<string>();
-                return;
-            }
-
-            if (_historyPerMonitor.Length < screens.Length)
-            {
-                var newHist = new LinkedList<string>[screens.Length];
-                for (int i = 0; i < screens.Length; i++)
-                {
-                    if (i < _historyPerMonitor.Length)
-                        newHist[i] = _historyPerMonitor[i];
-                    else
-                        newHist[i] = new LinkedList<string>();
-                }
-                _historyPerMonitor = newHist;
-            }
-        }
-
         private static void InitializeMonitorState()
         {
             _queues.Clear();
             _lastImages.Clear();
-            _cachedScreens = null;
+            StableScreensProvider.Refresh();
 
-            EnsureHistoryPerMonitor();
+            var screens = StableScreensProvider.Screens;
 
-            var screens = StableScreens;
+            HistoryManager.Instance.EnsureInitialized(screens);
 
             while (_queues.Count < screens.Length)
                 _queues.Add(BuildQueueForMonitor(_queues.Count));
@@ -137,7 +108,6 @@ namespace at365.WallpaperSlideshow
             while (_lastImages.Count < screens.Length)
                 _lastImages.Add(null);
         }
-
 
         internal static void InitializeApplication(bool forceInitialize = false)
         {
@@ -151,20 +121,15 @@ namespace at365.WallpaperSlideshow
 
         private static void PushHistory(int monitor, string imagePath)
         {
-            EnsureHistoryPerMonitor();
-
-            var list = _historyPerMonitor[monitor];
-            list.AddFirst(imagePath);
-
-            if (list.Count > _config.History.Limit)
-                list.RemoveLast();
+            HistoryManager.Instance.Push(monitor, imagePath, _config.History.Limit);
         }
 
         private static void UpdateWallpaper()
         {
             if (_paused) return;
 
-            var screens = StableScreens;
+            var screens = StableScreensProvider.Screens;
+
             if (_queues.Count != screens.Length)
                 InitializeMonitorState();
 
@@ -209,7 +174,8 @@ namespace at365.WallpaperSlideshow
 
         private static void ComposeWallpaperForMonitor(int monitorIndex, string? monitorImage, Graphics gMain, Rectangle virtualBounds)
         {
-            var screens = StableScreens;
+            var screens = StableScreensProvider.Screens;
+
             if (monitorIndex < 0 || monitorIndex >= screens.Length) return;
 
             var monitorConfig = (monitorIndex < _config.Monitors.Count)
@@ -591,205 +557,6 @@ namespace at365.WallpaperSlideshow
             }
 
             return false;
-        }
-
-        private static string Truncate(string text, int max)
-        {
-            if (text.Length <= max) return text;
-
-            string ext = Path.GetExtension(text);
-            string name = Path.GetFileNameWithoutExtension(text);
-
-            int allowed = max - ext.Length - 3;
-            if (allowed <= 0)
-                return "..." + ext;
-
-            return name.Substring(0, allowed) + "..." + ext;
-        }
-
-        private static ToolStripMenuItem CreateHistoryRootMenu()
-        {
-            var root = new ToolStripMenuItem("最近使った壁紙(&R)");
-
-            root.DropDownOpening += (_, _) =>
-            {
-                root.DropDownItems.Clear();
-                EnsureHistoryPerMonitor();
-
-                var thumbnailCache = new Dictionary<string, (Image? img, string? size, string? res)>();
-
-                for (int i = 0; i < _historyPerMonitor.Length; i++)
-                {
-                    int monitorIndex = i;
-                    var monItem = new ToolStripMenuItem($"{monitorIndex + 1}: ");
-                    root.DropDownItems.Add(monItem);
-
-                    monItem.DropDownOpening += (_, _) =>
-                    {
-                        monItem.DropDownItems.Clear();
-
-                        var list = _historyPerMonitor[monitorIndex];
-                        if (list == null || list.Count == 0)
-                        {
-                            monItem.DropDownItems.Add("(なし)");
-                            return;
-                        }
-
-                        foreach (var path in list)
-                        {
-                            var menuItem = CreateThumbnailMenuItem(path, thumbnailCache);
-                            monItem.DropDownItems.Add(menuItem);
-                        }
-                    };
-                }
-            };
-
-            return root;
-        }
-
-        private static ToolStripMenuItem CreateThumbnailMenuItem(
-            string path,
-            Dictionary<string, (Image? img, string? size, string? res)> cache)
-        {
-            var thumbWidth = _config.History.ThumbnailWidth;
-            var thumbheight = _config.History.ThumbnailHeight;
-
-            var panel = new Panel
-            {
-                Width = thumbWidth + 80,
-                Height = thumbheight + 60,
-                Margin = new Padding(4)
-            };
-
-            var pb = new PictureBox
-            {
-                Width = thumbWidth,
-                Height = thumbheight,
-                SizeMode = PictureBoxSizeMode.Zoom,
-                Image = null
-            };
-
-            var labelSize = new Label
-            {
-                Text = "",
-                AutoSize = false,
-                Width = panel.Width,
-                Height = 18,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Color.Gray
-            };
-
-            var labelRes = new Label
-            {
-                Text = "",
-                AutoSize = false,
-                Width = panel.Width,
-                Height = 18,
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = Color.Gray
-            };
-
-            panel.Controls.Add(pb);
-            panel.Controls.Add(labelSize);
-            panel.Controls.Add(labelRes);
-
-            pb.Top = 0;
-            pb.Left = (panel.Width - pb.Width) / 2;
-            labelSize.Top = pb.Bottom + 4;
-            labelRes.Top = labelSize.Bottom;
-
-            var host = new ToolStripControlHost(panel);
-            var parent = new ToolStripMenuItem(Truncate(Path.GetFileName(path), _config.History.MaxFileNameLength));
-            parent.DropDownItems.Add(host);
-            parent.DropDownDirection = ToolStripDropDownDirection.Left;
-
-            var tt = new ToolTip();
-            tt.SetToolTip(pb, path);
-            tt.SetToolTip(labelSize, path);
-            tt.SetToolTip(labelRes, path);
-            tt.SetToolTip(panel, path);
-
-            parent.DropDownOpened += (_, _) =>
-            {
-                if (!File.Exists(path))
-                {
-                    pb.Image = null;
-                    labelSize.Text = "(ファイルが存在しません)";
-                    labelRes.Text = "";
-                    return;
-                }
-
-                if (!cache.TryGetValue(path, out var info))
-                {
-                    Image? img = null;
-                    string sizeText = "";
-                    string resText = "";
-
-                    try { img = LoadImageWithoutLock(path); } catch { }
-                    try
-                    {
-                        var fi = new FileInfo(path);
-                        sizeText = $"{fi.Length / 1024f / 1024f:0.00} MB";
-                    }
-                    catch { }
-                    try
-                    {
-                        using var tmp = LoadImageWithoutLock(path);
-                        resText = $"{tmp.Width}×{tmp.Height}";
-                    }
-                    catch { }
-
-                    info = (img, sizeText, resText);
-                    cache[path] = info;
-                }
-
-                pb.Image = info.img;
-                labelSize.Text = info.size;
-                labelRes.Text = info.res;
-            };
-
-            parent.Click += (_, _) =>
-            {
-                if (File.Exists(path))
-                    OpenImage(path);
-            };
-
-            host.Click += (_, _) => OpenImage(path);
-            panel.Click += (_, _) => OpenImage(path);
-            pb.Click += (_, _) => OpenImage(path);
-            labelSize.Click += (_, _) => OpenImage(path);
-            labelRes.Click += (_, _) => OpenImage(path);
-
-            return parent;
-        }
-
-        private static void OpenImage(string path)
-        {
-            if (!File.Exists(path)) return;
-
-            try
-            {
-                string normalized = path.Replace('/', '\\').Replace("\\\\", "\\").Trim();
-                if (normalized.StartsWith("\\") && !normalized.StartsWith("\\\\"))
-                    normalized = "\\" + normalized;
-
-                if (!File.Exists(normalized))
-                {
-                    MessageBox.Show("ファイルが存在しません:\n" + normalized,
-                        "エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                Process.Start(new ProcessStartInfo(normalized)
-                {
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("ファイルを開けませんでした:\n" + ex.Message,
-                    "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
 
         private static Image LoadImageWithoutLock(string path)
