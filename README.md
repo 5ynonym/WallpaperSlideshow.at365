@@ -10,6 +10,16 @@
 
 ---
 
+## 使い方
+
+1. `config.json` を編集
+2. `WallpaperSlideshow365.exe` を実行  
+3. タスクトレイに常駐  
+   - **左クリック：一時停止／再開**
+   - **右クリック：メニュー**
+
+---
+
 ## 設定ファイル（config.json）
 
 `%UserProfile%\AppData\Roaming\at365\WallpaperSlideshow\config.json` に配置される JSON ファイルが優先して読み込まれます。
@@ -60,16 +70,6 @@
   - ThumbnailWidth: 履歴サムネイルの幅
   - ThumbnailHeight: 履歴サムネイルの高さ
   - MaxFileNameLength: 履歴ファイル名を省略する文字数
----
-
-## 使い方
-
-1. `config.json` を編集
-2. `WallpaperSlideshow365.exe` を実行  
-3. タスクトレイに常駐  
-   - **左クリック：一時停止／再開**
-   - **右クリック：メニュー**
-
 ---
 
 ## アンインストール
