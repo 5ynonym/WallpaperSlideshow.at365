@@ -120,21 +120,7 @@ namespace at365.WallpaperSlideshow
 
             for (int i = 0; i < StableScreens.Length; i++)
             {
-                string? folder = (i < _config.Monitors.Count) ? _config.Monitors[i].Folder : null;
-
-                if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
-                {
-                    var files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
-                        .Where(f => ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                        .ToList();
-
-                    _queues.Add(new Queue<string>(Shuffle(files)));
-                }
-                else
-                {
-                    _queues.Add(new Queue<string>());
-                }
-
+                _queues.Add(BuildQueueForMonitor(i));
                 _lastImages.Add(null);
             }
         }
@@ -153,22 +139,15 @@ namespace at365.WallpaperSlideshow
             {
                 if (_queues[i].Count == 0)
                 {
-                    string? folder = (i < _config.Monitors.Count) ? _config.Monitors[i].Folder : null;
-
-                    if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+                    _queues[i] = BuildQueueForMonitor(i);
+                    if (_lastImages[i] != null &&
+                        _queues[i].Count > 1 &&
+                        _queues[i].Peek() == _lastImages[i])
                     {
-                        var files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
-                            .Where(f => ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                            .ToList();
-
-                        var shuffled = Shuffle(files);
-                        if (_lastImages[i] != null && shuffled.Count > 1 && shuffled[0] == _lastImages[i])
-                        {
-                            int swapIndex = Random.Shared.Next(1, shuffled.Count);
-                            (shuffled[0], shuffled[swapIndex]) = (shuffled[swapIndex], shuffled[0]);
-                        }
-
-                        _queues[i] = new Queue<string>(shuffled);
+                        var arr = _queues[i].ToArray();
+                        int swapIndex = Random.Shared.Next(1, arr.Length);
+                        (arr[0], arr[swapIndex]) = (arr[swapIndex], arr[0]);
+                        _queues[i] = new Queue<string>(arr);
                     }
                 }
 
@@ -180,6 +159,25 @@ namespace at365.WallpaperSlideshow
             SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             OverwriteWithBlack(TempPath);
         }
+
+        private static Queue<string> BuildQueueForMonitor(int index)
+        {
+            string? folder = (index < _config.Monitors.Count) ? _config.Monitors[index].Folder : null;
+            List<string> files = new();
+            if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+            {
+                try
+                {
+                    files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
+                        .Where(f => ImageExts.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                        .ToList();
+                }
+                catch { }
+            }
+
+            return new Queue<string>(Shuffle(files));
+        }
+
 
         private static void ComposeWallpaper(string?[] monitorImages, string path)
         {
