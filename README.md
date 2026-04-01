@@ -17,19 +17,19 @@
 ```json
 {
   "IntervalSeconds": 60,
-  "TileCount": 8,
+  "TileCount": 12,
   "Monitors": [
     {
       "Folder": "C:/Wallpapers/16-9",
-      "Mode": "Fit",
+      "Mode": "Tile",
       "PaddingLeft": 0,
       "PaddingRight": 0,
       "PaddingTop": 0,
       "PaddingBottom": 40
     },
-  "Monitors": [
-    { "Folder": "C:/Wallpapers/Monitor1", "Mode": "Fit" },
     { "Folder": "C:/Wallpapers/Monitor2", "Mode": "Fill" }
+    { "Folder": "C:/Wallpapers/Monitor3", "Mode": "Fit" },
+    { "Folder": "C:/Wallpapers/Monitor4", "Mode": "Center" }
   ]
 }
 ```
