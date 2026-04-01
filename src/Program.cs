@@ -161,7 +161,8 @@ namespace at365.WallpaperSlideshow
             }
 
             ComposeWallpaper(monitorImages, TempPath);
-            SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            ApplyWallpaper();
+            // 設定した壁紙をすぐに黒で上書きしておく。これにより、次回以降の起動時に前回の壁紙が表示されるのを防止する。
             OverwriteWithBlack(TempPath);
         }
 
@@ -283,7 +284,6 @@ namespace at365.WallpaperSlideshow
             catch { }
         }
 
-
         private static List<string> Shuffle(List<string> list)
         {
             return list.OrderBy(_ => Random.Shared.Next()).ToList();
@@ -304,7 +304,7 @@ namespace at365.WallpaperSlideshow
                 _timer!.Change(Timeout.Infinite, Timeout.Infinite);
                 _paused = true;
                 _notifyIcon?.Icon = _iconPaused;
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                ApplyWallpaper();
             }
         }
 
@@ -323,15 +323,19 @@ namespace at365.WallpaperSlideshow
 
         internal static void ApplicationShutdown()
         {
-            try
-            {
-                OverwriteWithBlack(TempPath);
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
-            }
-            catch { }
+            try { ApplyWallpaper(); } catch { }
             try { _folderWatcher?.Dispose(); } catch { }
             try { _notifyIcon?.Dispose(); } catch { }
             try { Application.Exit(); } catch { }
+        }
+
+        private static void ApplyWallpaper()
+        {
+            try
+            {
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, TempPath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            }
+            catch { }
         }
     }
 }
