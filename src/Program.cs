@@ -25,7 +25,6 @@ namespace at365.WallpaperSlideshow
         private static List<Queue<string>> _queues = new();
         private static List<string?> _lastImages = new();
 
-        private static readonly int HistoryLimit = 10;
         private static List<string>[] _historyPerMonitor = Array.Empty<List<string>>();
 
         private static Screen[]? _cachedScreens;
@@ -225,6 +224,14 @@ namespace at365.WallpaperSlideshow
             UpdateWallpaper();
         }
 
+        private static void PushHistory(int monitor, string imagePath)
+        {
+            var list = _historyPerMonitor[monitor];
+            list.Insert(0, imagePath);
+
+            if (list.Count > Math.Max(_config.HistoryLimit, _config.TileCount))
+                list.RemoveAt(list.Count - 1);
+        }
 
         private static void UpdateWallpaper()
         {
@@ -252,26 +259,98 @@ namespace at365.WallpaperSlideshow
                     }
                 }
 
-                monitorImages[i] = _queues[i].Count > 0 ? _queues[i].Dequeue() : null;
-                _lastImages[i] = monitorImages[i];
+                var image = _queues[i].Count > 0 ? _queues[i].Dequeue() : null;
+                _lastImages[i] = monitorImages[i] = image;
             }
+
+            Rectangle virtualBounds = Rectangle.Empty;
+            foreach (var screen in screens)
+                virtualBounds = Rectangle.Union(virtualBounds, screen.Bounds);
+
+            using var bmp = new Bitmap(virtualBounds.Width, virtualBounds.Height);
+            using var gMain = Graphics.FromImage(bmp);
+            gMain.FillRectangle(Brushes.Black, new Rectangle(0, 0, bmp.Width, bmp.Height));
 
             for (int i = 0; i < screens.Length; i++)
             {
-                if (i < _historyPerMonitor.Length && _historyPerMonitor[i] != null && monitorImages[i] != null)
-                {
-                    var list = _historyPerMonitor[i];
-                    list.Insert(0, monitorImages[i]!);
-
-                    if (list.Count > HistoryLimit)
-                        list.RemoveAt(list.Count - 1);
-                }
+                ComposeWallpaperForMonitor(i, monitorImages[i], gMain, virtualBounds);
             }
 
-            ComposeWallpaper(monitorImages, Const.WallpaperPicturePath);
+            try { bmp.Save(Const.WallpaperPicturePath, ImageFormat.Bmp); } catch { }
+
             ApplyWallpaper();
-            // 設定した壁紙をすぐに黒で上書きしておく。これにより、次回以降の起動時に前回の壁紙が表示されるのを防止する。
             OverwriteWithBlack(Const.WallpaperPicturePath);
+        }
+
+        private static void ComposeWallpaperForMonitor(int monitorIndex, string? monitorImage, Graphics gMain, Rectangle virtualBounds)
+        {
+            var screens = StableScreens;
+            if (monitorIndex < 0 || monitorIndex >= screens.Length)
+            {
+                return;
+            }
+
+            var screen = screens[monitorIndex];
+            var bounds = screen.Bounds;
+
+            var drawRect = new Rectangle(
+                bounds.Left - virtualBounds.Left,
+                bounds.Top - virtualBounds.Top,
+                bounds.Width,
+                bounds.Height
+            );
+
+            var mode = (monitorIndex < _config.Monitors.Count) ? _config.Monitors[monitorIndex].Mode : StretchMode.Fit;
+
+            if (mode == StretchMode.Tile)
+            {
+                if (monitorImage == null)
+                {
+                    gMain.FillRectangle(Brushes.Black, drawRect);
+                    return;
+                }
+
+                var paths = new List<string> { monitorImage };
+                PushHistory(monitorIndex, monitorImage);
+
+                while (paths.Count < _config.TileCount && _queues[monitorIndex].Count > 0)
+                {
+                    var next = _queues[monitorIndex].Dequeue();
+                    if (next != null)
+                    {
+                        paths.Add(next);
+                        PushHistory(monitorIndex, next);
+                    }
+                }
+
+                var imgs = paths.Select(p => Image.FromFile(p)).ToArray();
+                DrawTile(gMain, imgs, drawRect);
+
+                foreach (var im in imgs)
+                    im.Dispose();
+
+                return;
+            }
+            else
+            {
+
+                if (monitorImage == null)
+                {
+                    gMain.FillRectangle(Brushes.Black, drawRect);
+                    return;
+                }
+
+                try
+                {
+                    using var img = Image.FromFile(monitorImage);
+                    DrawImageWithMode(gMain, img, drawRect, mode ?? StretchMode.Fit);
+                    PushHistory(monitorIndex, monitorImage);
+                }
+                catch
+                {
+                    gMain.FillRectangle(Brushes.Black, drawRect);
+                }
+            }
         }
 
         private static Queue<string> BuildQueueForMonitor(int index)
@@ -290,45 +369,6 @@ namespace at365.WallpaperSlideshow
             }
 
             return new Queue<string>(Shuffle(files));
-        }
-
-        private static void ComposeWallpaper(string?[] monitorImages, string path)
-        {
-            Rectangle virtualBounds = Rectangle.Empty;
-            var screens = StableScreens;
-            foreach (var screen in screens)
-                virtualBounds = Rectangle.Union(virtualBounds, screen.Bounds);
-
-            using var bmp = new Bitmap(virtualBounds.Width, virtualBounds.Height);
-            using var gMain = Graphics.FromImage(bmp);
-            gMain.FillRectangle(Brushes.Black, new Rectangle(0, 0, bmp.Width, bmp.Height));
-
-            for (int i = 0; i < screens.Length; i++)
-            {
-                var screen = screens[i];
-                var bounds = screen.Bounds;
-                var drawRect = new Rectangle(bounds.Left - virtualBounds.Left, bounds.Top - virtualBounds.Top, bounds.Width, bounds.Height);
-
-                if (monitorImages[i] == null)
-                {
-                    gMain.FillRectangle(Brushes.Black, drawRect);
-                }
-                else
-                {
-                    try
-                    {
-                        using var img = Image.FromFile(monitorImages[i]!);
-                        var mode = (i < _config.Monitors.Count) ? _config.Monitors[i].Mode : null;
-                        DrawImageWithMode(gMain, img, drawRect, mode ?? StretchMode.Fit);
-                    }
-                    catch
-                    {
-                        gMain.FillRectangle(Brushes.Black, drawRect);
-                    }
-                }
-            }
-
-            try { bmp.Save(path, ImageFormat.Bmp); } catch { }
         }
 
         private static void DrawImageWithMode(Graphics g, Image img, Rectangle drawRect, StretchMode mode)
@@ -377,6 +417,156 @@ namespace at365.WallpaperSlideshow
                         break;
                     }
             }
+        }
+        private const float VisualMargin = 5f; // 左右上下に 5px ずつ → 画像間は実質 10px
+
+        private static void DrawTile(Graphics g, Image[] images, Rectangle rect)
+        {
+            int bestRows = -1;
+            float bestScore = float.MaxValue;
+            Image[][] bestSplit = null;
+            float[] bestHeights = null;
+
+            for (int rowCount = 1; rowCount <= images.Length; rowCount++)
+            {
+                var rows = SplitRowsAspectBalanced(images, rowCount);
+
+                float[] heights = new float[rowCount];
+                bool ok = true;
+
+                for (int i = 0; i < rowCount; i++)
+                {
+                    heights[i] = CalcRowHeightNoOverlap(rows[i], rect.Width);
+                    if (heights[i] <= 0)
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+
+                if (!ok)
+                    continue;
+
+                float totalHeight = heights.Sum();
+                if (totalHeight > rect.Height)
+                {
+                    float scale = rect.Height / totalHeight;
+                    for (int i = 0; i < rowCount; i++)
+                        heights[i] *= scale;
+
+                    totalHeight = heights.Sum();
+                }
+
+                float unusedHeight = rect.Height - totalHeight;
+                float unusedWidth = 0;
+                for (int i = 0; i < rowCount; i++)
+                {
+                    float rowWidth = rows[i].Sum(im => (im.Width / (float)im.Height) * heights[i]);
+                    unusedWidth += Math.Max(0, rect.Width - rowWidth);
+                }
+
+                float score = unusedHeight + unusedWidth;
+
+                // 1 行はペナルティ
+                if (rowCount == 1)
+                    score *= 5f;
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestRows = rowCount;
+                    bestSplit = rows;
+                    bestHeights = heights;
+                }
+            }
+
+            if (bestRows < 0)
+                return;
+
+            float totalHeightFinal = bestHeights.Sum();
+            float gapY = (rect.Height - totalHeightFinal) / (bestRows + 1);
+            if (gapY < 0) gapY = 0;
+
+            float y = rect.Top + gapY;
+
+            for (int i = 0; i < bestRows; i++)
+            {
+                DrawRowNoOverlap_WithVisualMargin(g, bestSplit[i], rect, bestHeights[i], y);
+                y += bestHeights[i] + gapY;
+            }
+        }
+
+        private static Image[][] SplitRowsAspectBalanced(Image[] images, int rows)
+        {
+            var result = new List<Image>[rows];
+            for (int i = 0; i < rows; i++)
+                result[i] = new List<Image>();
+
+            float[] rowAspect = new float[rows];
+
+            foreach (var img in images.OrderByDescending(i => (float)i.Width / i.Height))
+            {
+                int target = Array.IndexOf(rowAspect, rowAspect.Min());
+                result[target].Add(img);
+                rowAspect[target] += (float)img.Width / img.Height;
+            }
+
+            return result.Select(r => r.ToArray()).ToArray();
+        }
+
+        private static float CalcRowHeightNoOverlap(Image[] row, int totalWidth)
+        {
+            float sumAspect = row.Sum(im => (float)im.Width / im.Height);
+            float h = totalWidth / sumAspect;
+            return AdjustHeight(row, totalWidth, h);
+        }
+
+        private static float AdjustHeight(Image[] row, int totalWidth, float h)
+        {
+            float width = 0;
+            foreach (var img in row)
+                width += (img.Width / (float)img.Height) * h;
+
+            if (width <= totalWidth)
+                return h;
+
+            if (h < 1)
+                return -1;
+
+            return AdjustHeight(row, totalWidth, h * 0.95f);
+        }
+
+        // 段組みは隙間なしで計算 → 描画時にだけ見た目の余白を付ける
+        private static void DrawRowNoOverlap_WithVisualMargin(Graphics g, Image[] row, Rectangle rect, float rowHeight, float y)
+        {
+            float[] widths = row.Select(im => (float)im.Width / im.Height * rowHeight).ToArray();
+            float total = widths.Sum();
+            float gapX = (rect.Width - total) / (row.Length + 1);
+            if (gapX < 0) gapX = 0;
+
+            float x = rect.Left + gapX;
+
+            for (int i = 0; i < row.Length; i++)
+            {
+                float w = widths[i];
+                var layoutRect = new RectangleF(x, y, w, rowHeight);
+
+                // 見た目の隙間：内側に 5px ずつ余白 → 画像間は実質 10px
+                var inner = RectangleF.Inflate(layoutRect, -VisualMargin, -VisualMargin);
+
+                DrawImageFit(g, row[i], Rectangle.Round(inner));
+                x += w + gapX;
+            }
+        }
+
+        private static void DrawImageFit(Graphics g, Image img, Rectangle rect)
+        {
+            float s = Math.Min((float)rect.Width / img.Width, (float)rect.Height / img.Height);
+            int w = (int)(img.Width * s);
+            int h = (int)(img.Height * s);
+            int x = rect.Left + (rect.Width - w) / 2;
+            int y = rect.Top + (rect.Height - h) / 2;
+            g.DrawImage(img, new Rectangle(x, y, w, h));
         }
 
         private static void OverwriteWithBlack(string targetPath)

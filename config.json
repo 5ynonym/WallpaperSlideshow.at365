@@ -1,7 +1,23 @@
 {
   "IntervalSeconds": 10,
+  "HistoryLimit": 30,
+  "TileCount": 8,
   "Monitors": [
-    { "Folder": "C:/Wallpapers/16-9" },
-    { "Folder": "" }
+    {
+      "Folder": "C:/Wallpapers/16-9",
+      "Mode": "Fit"
+    },
+    {
+      "Folder": "",
+      "Mode": "Fill"
+    },
+    {
+      "Folder": "",
+      "Mode": "Center"
+    },
+    {
+      "Folder": "",
+      "Mode": "Tile"
+    }
   ]
 }

@@ -8,7 +8,8 @@ namespace at365.WallpaperSlideshow
         Fill,    // 画面いっぱい（現在の動作）
         Fit,     // 黒帯ありで収まるように
         Stretch, // アスペクト比無視で引き伸ばし
-        Center   // 中央に等倍表示
+        Center,   // 中央に等倍表示
+        Tile,   // タイル表示 (TileCount枚数で画面を埋める)
     }
 
     public class MonitorConfig
@@ -20,6 +21,8 @@ namespace at365.WallpaperSlideshow
     public class Config
     {
         public int IntervalSeconds { get; set; } = 60;
+        public int HistoryLimit { get; set; } = 30;
+        public int TileCount { get; set; } = 8;
         public List<MonitorConfig> Monitors { get; set; } = new();
 
         public static Config? LoadConfig()
