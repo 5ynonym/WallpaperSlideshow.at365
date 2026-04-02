@@ -9,6 +9,8 @@ namespace at365.WallpaperSlideshow
         private static readonly Lazy<WallpaperRenderer> _lazy = new(() => new WallpaperRenderer());
         private Config? _config;
 
+        private static readonly Bitmap _empty = new Bitmap(1, 1);
+
         private WallpaperRenderer() { }
 
         public void SetConfig(Config config)
@@ -319,12 +321,7 @@ namespace at365.WallpaperSlideshow
         // ============================================================
         public void OverwriteWithBlack(string targetPath)
         {
-            try
-            {
-                using var bmp = new Bitmap(1, 1);
-                bmp.Save(targetPath, ImageFormat.Bmp);
-            }
-            catch { }
+            try { _empty.Save(targetPath, ImageFormat.Bmp); } catch { }
         }
 
         // ============================================================

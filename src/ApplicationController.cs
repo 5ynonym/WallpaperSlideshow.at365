@@ -95,7 +95,6 @@ namespace at365.WallpaperSlideshow
 
             QueueManager.Instance.Initialize(StableScreensProvider.Screens);
             HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
-
             WallpaperController.Instance.UpdateWallpaper();
         }
 
@@ -147,6 +146,7 @@ namespace at365.WallpaperSlideshow
                 _timer!.Change(0, _config!.IntervalSeconds * 1000);
                 _paused = false;
                 TrayIconManager.Instance.UpdateIcon();
+                InitializeApplication();
             }
             else
             {
@@ -162,12 +162,12 @@ namespace at365.WallpaperSlideshow
             switch (e.Reason)
             {
                 case SessionSwitchReason.SessionLock:
-                case SessionSwitchReason.RemoteDisconnect:
+                case SessionSwitchReason.SessionLogoff:
                     TogglePause(true);
                     break;
 
+                case SessionSwitchReason.SessionLogon:
                 case SessionSwitchReason.SessionUnlock:
-                case SessionSwitchReason.RemoteConnect:
                     TogglePause(false);
                     break;
             }
