@@ -37,6 +37,7 @@ namespace at365.WallpaperSlideshow
 
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
             SystemEvents.SessionSwitch += OnSessionSwitch;
+            SystemEvents.SessionEnding += OnSessionEnding;
 
             TrayIconManager.Instance.Initialize(
                 config,
@@ -157,9 +158,6 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        // ============================================================
-        // SessionSwitch（ロック/アンロック）
-        // ============================================================
         private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
         {
             switch (e.Reason)
@@ -174,6 +172,11 @@ namespace at365.WallpaperSlideshow
                     TogglePause(false);
                     break;
             }
+        }
+
+        private void OnSessionEnding(object sender, SessionEndingEventArgs e)
+        {
+            TogglePause(true);
         }
 
         // ============================================================
