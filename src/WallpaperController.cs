@@ -19,9 +19,6 @@ namespace at365.WallpaperSlideshow
             _config = config;
         }
 
-        // ============================================================
-        // 壁紙更新
-        // ============================================================
         public void UpdateWallpaper()
         {
             var screens = StableScreensProvider.Screens;
@@ -31,9 +28,6 @@ namespace at365.WallpaperSlideshow
             string?[] monitorImages = new string?[screens.Length];
             Rectangle virtualBounds = Rectangle.Empty;
 
-            // ------------------------------------------------------------
-            // 各モニタの画像を QueueManager から取得
-            // ------------------------------------------------------------
             for (int i = 0; i < screens.Length; i++)
             {
                 var next = QueueManager.Instance.GetNextImage(i);
@@ -41,16 +35,10 @@ namespace at365.WallpaperSlideshow
                 virtualBounds = Rectangle.Union(virtualBounds, screens[i].Bounds);
             }
 
-            // ------------------------------------------------------------
-            // 仮想キャンバス作成
-            // ------------------------------------------------------------
             using var bmp = new Bitmap(virtualBounds.Width, virtualBounds.Height);
             using var gMain = Graphics.FromImage(bmp);
             gMain.FillRectangle(Brushes.Black, new Rectangle(0, 0, bmp.Width, bmp.Height));
 
-            // ------------------------------------------------------------
-            // 各モニタを描画
-            // ------------------------------------------------------------
             for (int i = 0; i < screens.Length; i++)
             {
                 WallpaperRenderer.Instance.ComposeMonitor(
@@ -64,9 +52,6 @@ namespace at365.WallpaperSlideshow
                 );
             }
 
-            // ------------------------------------------------------------
-            // 壁紙ファイル保存
-            // ------------------------------------------------------------
             try
             {
                 bmp.Save(Const.WallpaperPicturePath, ImageFormat.Bmp);
@@ -79,9 +64,6 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        // ============================================================
-        // 壁紙をクリア
-        // ============================================================
         public void ClearWallpaper()
         {
             try

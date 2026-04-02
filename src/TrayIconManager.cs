@@ -24,9 +24,6 @@ namespace at365.WallpaperSlideshow
 
         private TrayIconManager() { }
 
-        // ------------------------------------------------------------
-        // 初期化
-        // ------------------------------------------------------------
         public void Initialize(
             Config config,
             Func<bool> getPausedState,
@@ -55,26 +52,17 @@ namespace at365.WallpaperSlideshow
             BuildContextMenu();
         }
 
-        // ------------------------------------------------------------
-        // Config を後から注入
-        // ------------------------------------------------------------
         public void SetConfig(Config config)
         {
             _config = config;
         }
 
-        // ------------------------------------------------------------
-        // 左クリックで Pause/Resume
-        // ------------------------------------------------------------
         private void OnMouseClick(object? sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left)
                 _togglePause?.Invoke();
         }
 
-        // ------------------------------------------------------------
-        // コンテキストメニュー構築
-        // ------------------------------------------------------------
         private void BuildContextMenu()
         {
             if (_notifyIcon == null) return;
@@ -95,11 +83,6 @@ namespace at365.WallpaperSlideshow
             _notifyIcon.ContextMenuStrip = menu;
         }
 
-        
-
-        // ------------------------------------------------------------
-        // アイコン更新
-        // ------------------------------------------------------------
         public void UpdateIcon()
         {
             if (_notifyIcon == null || _iconRunning == null || _iconPaused == null)
@@ -109,9 +92,6 @@ namespace at365.WallpaperSlideshow
             _notifyIcon.Icon = paused ? _iconPaused : _iconRunning;
         }
 
-        // ------------------------------------------------------------
-        // データフォルダを開く（Program から移動）
-        // ------------------------------------------------------------
         private void OpenDataFolder()
         {
             if (_config == null) return;
@@ -128,9 +108,6 @@ namespace at365.WallpaperSlideshow
             catch { }
         }
 
-        // ------------------------------------------------------------
-        // Dispose
-        // ------------------------------------------------------------
         public void Dispose()
         {
             if (_disposed) return;

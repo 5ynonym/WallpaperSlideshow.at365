@@ -38,17 +38,11 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        // ------------------------------------------------------------
-        // キューの取得
-        // ------------------------------------------------------------
         public Queue<string> GetQueue(int monitorIndex)
         {
             return _queues[monitorIndex];
         }
 
-        // ------------------------------------------------------------
-        // 次の画像を取得（必要ならキュー再構築）
-        // ------------------------------------------------------------
         public string? GetNextImage(int monitorIndex)
         {
             if (_config == null)
@@ -82,9 +76,6 @@ namespace at365.WallpaperSlideshow
             return next;
         }
 
-        // ------------------------------------------------------------
-        // キュー構築
-        // ------------------------------------------------------------
         private Queue<string> BuildQueueForMonitor(int index)
         {
             if (_config == null)
@@ -116,9 +107,6 @@ namespace at365.WallpaperSlideshow
             return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp";
         }
 
-        // ------------------------------------------------------------
-        // シャッフル
-        // ------------------------------------------------------------
         private List<string> Shuffle(List<string> list)
         {
             return list.OrderBy(_ => Random.Shared.Next()).ToList();

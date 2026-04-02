@@ -5,11 +5,10 @@ namespace at365.WallpaperSlideshow
     public sealed class WallpaperRenderer
     {
         public static WallpaperRenderer Instance => _lazy.Value;
-
         private static readonly Lazy<WallpaperRenderer> _lazy = new(() => new WallpaperRenderer());
-        private Config? _config;
 
-        private static readonly Bitmap _empty = new Bitmap(1, 1);
+        private Config? _config;
+        private static readonly Bitmap _empty = new(1, 1);
 
         private WallpaperRenderer() { }
 
@@ -18,9 +17,6 @@ namespace at365.WallpaperSlideshow
             _config = config;
         }
 
-        // ============================================================
-        // 画像読み込み（ロックなし）
-        // ============================================================
         public Image LoadImageWithoutLock(string path)
         {
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -30,9 +26,6 @@ namespace at365.WallpaperSlideshow
             return Image.FromStream(ms);
         }
 
-        // ============================================================
-        // メイン描画（1 モニタ分）
-        // ============================================================
         public void ComposeMonitor(
             int monitorIndex,
             string? monitorImage,
@@ -61,9 +54,6 @@ namespace at365.WallpaperSlideshow
 
             var mode = monitorConfig.Mode ?? StretchMode.Fit;
 
-            // ------------------------------------------------------------
-            // Tile モード
-            // ------------------------------------------------------------
             if (mode == StretchMode.Tile)
             {
                 if (monitorImage == null)
@@ -94,9 +84,6 @@ namespace at365.WallpaperSlideshow
                 return;
             }
 
-            // ------------------------------------------------------------
-            // 通常モード（Fill / Fit / Stretch / Center）
-            // ------------------------------------------------------------
             if (monitorImage == null)
             {
                 gMain.FillRectangle(Brushes.Black, drawRect);
@@ -316,17 +303,11 @@ namespace at365.WallpaperSlideshow
             g.DrawImage(img, new Rectangle(x, y, w, h));
         }
 
-        // ============================================================
-        // 黒塗り
-        // ============================================================
         public void OverwriteWithBlack(string targetPath)
         {
             try { _empty.Save(targetPath, ImageFormat.Bmp); } catch { }
         }
 
-        // ============================================================
-        // シャッフル
-        // ============================================================
         public List<string> Shuffle(List<string> list)
         {
             return list.OrderBy(_ => Random.Shared.Next()).ToList();

@@ -22,9 +22,6 @@ namespace at365.WallpaperSlideshow
 
         private ApplicationController() { }
 
-        // ============================================================
-        // 初期化
-        // ============================================================
         public void Initialize(Config config, DispatcherForm dispatcherForm)
         {
             EnsureSingleInstance();
@@ -75,9 +72,6 @@ namespace at365.WallpaperSlideshow
             WallpaperController.Instance.UpdateWallpaper();
         }
 
-        // ============================================================
-        // アプリ初期化
-        // ============================================================
         private void InitializeApplication(bool forceInitialize = false)
         {
             bool monitorChanged = HasMonitorConfigChanged();
@@ -127,9 +121,6 @@ namespace at365.WallpaperSlideshow
             catch { }
         }
 
-        // ============================================================
-        // Pause / Resume
-        // ============================================================
         public void TogglePause(bool? forceState = null)
         {
             bool target = forceState ?? !_paused;
@@ -171,9 +162,6 @@ namespace at365.WallpaperSlideshow
             TogglePause(true);
         }
 
-        // ============================================================
-        // Monitor 変更検知
-        // ============================================================
         private bool HasMonitorConfigChanged()
         {
             var screens = Screen.AllScreens
@@ -202,9 +190,6 @@ namespace at365.WallpaperSlideshow
             return false;
         }
 
-        // ============================================================
-        // 壁紙スパンモード
-        // ============================================================
         private void SetWallpaperSpanMode()
         {
             using var key = Registry.CurrentUser.OpenSubKey(@"Control Panel\\Desktop", true);
@@ -215,9 +200,6 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        // ============================================================
-        // シングルインスタンス
-        // ============================================================
         private void EnsureSingleInstance()
         {
             var current = Process.GetCurrentProcess();
@@ -237,9 +219,6 @@ namespace at365.WallpaperSlideshow
             Application.Exit();
         }
 
-        // ============================================================
-        // Dispose
-        // ============================================================
         public void Dispose()
         {
             if (_disposed) return;
