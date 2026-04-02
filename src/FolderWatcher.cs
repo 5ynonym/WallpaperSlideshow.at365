@@ -7,8 +7,6 @@
 
         private readonly object _lock = new();
         private System.Threading.Timer? _debounceTimer;
-        private const int DebounceMs = 500;
-
         private bool _disposed = false;
 
         public FolderWatcher(IEnumerable<string?> folders, Action onChanged)
@@ -51,13 +49,7 @@
                 {
                     if (_disposed) return;
 
-                    _debounceTimer ??= new System.Threading.Timer(_ =>
-                    {
-                        try { _onChanged(); }
-                        catch { }
-                    }, null, Timeout.Infinite, Timeout.Infinite);
-
-                    _debounceTimer.Change(DebounceMs, Timeout.Infinite);
+                    _onChanged();
                 }
             }
             catch { }

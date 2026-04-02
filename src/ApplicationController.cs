@@ -17,6 +17,7 @@ namespace at365.WallpaperSlideshow
         private System.Windows.Forms.Timer? _uiTimer;
         private Rectangle[]? _lastMonitorBounds;
 
+        private bool _requiredInitialize = false;
         private bool _paused = false;
         private bool _disposed;
 
@@ -26,7 +27,9 @@ namespace at365.WallpaperSlideshow
         {
             EnsureSingleInstance();
             SetWallpaperSpanMode();
+
             ApplyConfig(config);
+            InitializeApplication();
 
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
             SystemEvents.SessionSwitch += OnSessionSwitch;
@@ -42,10 +45,25 @@ namespace at365.WallpaperSlideshow
                 shutdown: ApplicationShutdown
             );
 
-            _folderWatcher = new FolderWatcher(
-                config.Monitors.Select(m => m.Folder),
-                () => dispatcherForm.BeginInvoke(() => InitializeApplication(true))
-            );
+            if (_uiTimer == null)
+            {
+                _uiTimer = new System.Windows.Forms.Timer();
+                _uiTimer.Tick += (_, _) =>
+                {
+                    if (_requiredInitialize)
+                    {
+                        _requiredInitialize = false;
+                        InitializeApplication(true);
+                    }
+                    else
+                    {
+                        WallpaperController.Instance.UpdateWallpaper();
+                    }
+                };
+            }
+
+            _uiTimer.Interval = config.IntervalSeconds * 1000;
+            _uiTimer.Start();
 
             SetupConfigWatcher();
         }
@@ -53,22 +71,22 @@ namespace at365.WallpaperSlideshow
         private void ApplyConfig(Config config)
         {
             WallpaperRenderer.Instance.SetConfig(config);
-            HistoryManager.Instance.SetConfig(config);
-            QueueManager.Instance.SetConfig(config);
             WallpaperController.Instance.Initialize(config);
-
-            if (_uiTimer == null)
-            {
-                _uiTimer = new System.Windows.Forms.Timer();
-                _uiTimer.Tick += (_, _) => WallpaperController.Instance.UpdateWallpaper();
-            }
-
-            _uiTimer.Interval = config.IntervalSeconds * 1000;
-            _uiTimer.Start();
-
+            QueueManager.Instance.SetConfig(config);
             QueueManager.Instance.Initialize(StableScreensProvider.Screens);
+            HistoryManager.Instance.SetConfig(config);
             HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
-            WallpaperController.Instance.UpdateWallpaper();
+            RebuildFolderWatcher(config);
+        }
+
+        private void RebuildFolderWatcher(Config config)
+        {
+            try { _folderWatcher?.Dispose(); } catch { }
+
+            _folderWatcher = new FolderWatcher(
+                config.Monitors.Select(m => m.Folder),
+                () => _requiredInitialize = true
+            );
         }
 
         private void InitializeApplication(bool forceInitialize = false)
@@ -101,7 +119,7 @@ namespace at365.WallpaperSlideshow
                 _configDebounce?.Dispose();
                 _configDebounce = new System.Threading.Timer(_ =>
                 {
-                    ReloadConfig();
+                    DispatcherForm.Instance.BeginInvoke(() => ReloadConfig());
                 }, null, 500, Timeout.Infinite);
             };
 
@@ -115,6 +133,7 @@ namespace at365.WallpaperSlideshow
                 var newConfig = Config.LoadConfig();
                 if (newConfig == null) return;
 
+                _requiredInitialize = true;
                 ApplyConfig(newConfig);
             }
             catch { }
@@ -125,9 +144,9 @@ namespace at365.WallpaperSlideshow
             bool target = forceState ?? !_paused;
             if (!target)
             {
+                InitializeApplication(true);
                 _uiTimer!.Start();
                 _paused = false;
-                InitializeApplication(true);
             }
             else
             {
