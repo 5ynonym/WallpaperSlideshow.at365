@@ -24,17 +24,11 @@ namespace at365.WallpaperSlideshow
         // ============================================================
         public void UpdateWallpaper()
         {
-            if (_config == null)
-                throw new InvalidOperationException("WallpaperController.Initialize() が呼ばれていません");
-
             var screens = StableScreensProvider.Screens;
-
-            // キュー初期化（必要なら）
             QueueManager.Instance.Initialize(screens);
             HistoryManager.Instance.EnsureInitialized(screens);
 
             string?[] monitorImages = new string?[screens.Length];
-
             Rectangle virtualBounds = Rectangle.Empty;
 
             // ------------------------------------------------------------
@@ -82,7 +76,7 @@ namespace at365.WallpaperSlideshow
         // ============================================================
         // 壁紙適用
         // ============================================================
-        private void ApplyWallpaper()
+        public void ApplyWallpaper()
         {
             try
             {
@@ -92,7 +86,6 @@ namespace at365.WallpaperSlideshow
             catch { }
         }
 
-        // WinAPI
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, string pvParam, uint fWinIni);
 

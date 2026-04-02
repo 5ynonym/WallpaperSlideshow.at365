@@ -32,7 +32,6 @@ namespace at365.WallpaperSlideshow
         {
             EnsureSingleInstance();
             SetWallpaperSpanMode();
-
             ApplyConfig(config);
 
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
@@ -154,7 +153,7 @@ namespace at365.WallpaperSlideshow
                 _timer!.Change(Timeout.Infinite, Timeout.Infinite);
                 _paused = true;
                 TrayIconManager.Instance.UpdateIcon();
-                WallpaperController.Instance.UpdateWallpaper();
+                WallpaperController.Instance.ApplyWallpaper();
             }
         }
 
