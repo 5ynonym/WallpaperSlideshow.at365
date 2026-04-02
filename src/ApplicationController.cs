@@ -30,10 +30,8 @@ namespace at365.WallpaperSlideshow
 
             SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
             SystemEvents.SessionSwitch += OnSessionSwitch;
-            SystemEvents.SessionEnding += OnSessionEnding;
-
             dispatcherForm.OnRdpConnect = () => TogglePause(true);
-            dispatcherForm.OnRdpDisconnect = () => TogglePause(false);
+            dispatcherForm.OnRdpDisconnect = () => TogglePause(true);
 
             TrayIconManager.Instance.Initialize(
                 config,
@@ -136,8 +134,8 @@ namespace at365.WallpaperSlideshow
             {
                 _uiTimer!.Stop();
                 _paused = true;
-                TrayIconManager.Instance.UpdateIcon();
                 WallpaperController.Instance.ClearWallpaper();
+                TrayIconManager.Instance.UpdateIcon();
             }
         }
 
@@ -146,20 +144,13 @@ namespace at365.WallpaperSlideshow
             switch (e.Reason)
             {
                 case SessionSwitchReason.SessionLock:
-                case SessionSwitchReason.SessionLogoff:
                     TogglePause(true);
                     break;
 
-                case SessionSwitchReason.SessionLogon:
                 case SessionSwitchReason.SessionUnlock:
                     TogglePause(false);
                     break;
             }
-        }
-
-        private void OnSessionEnding(object sender, SessionEndingEventArgs e)
-        {
-            TogglePause(true);
         }
 
         private bool HasMonitorConfigChanged()
