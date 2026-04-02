@@ -216,15 +216,38 @@ namespace at365.WallpaperSlideshow
         {
             try
             {
-                Process.Start(new ProcessStartInfo(path)
+                string normalized = path.Replace('/', '\\').Trim();
+
+                while (normalized.Contains("\\\\"))
+                    normalized = normalized.Replace("\\\\", "\\");
+
+                if (normalized.StartsWith("\\") && !normalized.StartsWith("\\\\"))
+                    normalized = "\\" + normalized;
+
+                if (!File.Exists(normalized))
+                {
+                    MessageBox.Show(
+                        $"ファイルが存在しません:\n{normalized}",
+                        "エラー",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                    return;
+                }
+
+                Process.Start(new ProcessStartInfo(normalized)
                 {
                     UseShellExecute = true
                 });
             }
             catch (Exception ex)
             {
-                MessageBox.Show("ファイルを開けませんでした:\n" + ex.Message,
-                    "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(
+                    "ファイルを開けませんでした:\n" + ex.Message,
+                    "エラー",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
         }
 
