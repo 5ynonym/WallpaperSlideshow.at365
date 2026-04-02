@@ -9,16 +9,16 @@ namespace at365.WallpaperSlideshow
 
         public static TrayIconManager Instance => _lazy.Value;
 
-        private Config? _config;
+        private Config? _config = null;
+        private NotifyIcon? _notifyIcon = null;
+        private Icon? _iconRunning = null;
+        private Icon? _iconPaused = null;
 
-        private NotifyIcon? _notifyIcon;
-        private Icon? _iconRunning;
-        private Icon? _iconPaused;
-
-        private Func<bool>? _getPausedState;
-        private Action? _togglePause;
-        private Func<ToolStripMenuItem>? _createHistoryMenu;
-        private Action? _shutdown;
+        private Action? _leftClickAction = null;
+        private Action? _middleClickAction = null;
+        private Action? _togglePause = null;
+        private Func<ToolStripMenuItem>? _createHistoryMenu = null;
+        private Action? _shutdown = null;
 
         private bool _disposed;
 
@@ -26,13 +26,15 @@ namespace at365.WallpaperSlideshow
 
         public void Initialize(
             Config config,
-            Func<bool> getPausedState,
-            Action togglePause,
+            Action? leftClickAction,
+            Action? middleClickAction,
+            Action? togglePause,
             Func<ToolStripMenuItem> createHistoryMenu,
             Action shutdown)
         {
             _config = config;
-            _getPausedState = getPausedState;
+            _leftClickAction = leftClickAction ?? togglePause;
+            _middleClickAction = middleClickAction ?? togglePause;
             _togglePause = togglePause;
             _createHistoryMenu = createHistoryMenu;
             _shutdown = shutdown;
@@ -59,8 +61,15 @@ namespace at365.WallpaperSlideshow
 
         private void OnMouseClick(object? sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left)
-                _togglePause?.Invoke();
+            switch (e.Button)
+            {
+                case MouseButtons.Left:
+                    _leftClickAction?.Invoke();
+                    break;
+                case MouseButtons.Middle:
+                    _middleClickAction?.Invoke();
+                    break;
+            }
         }
 
         private void BuildContextMenu()
@@ -69,12 +78,23 @@ namespace at365.WallpaperSlideshow
 
             var menu = new ContextMenuStrip();
 
+            if (_togglePause != null)
+            {
+                var pause = new ToolStripMenuItem("一時停止/再開(&P)");
+                pause.Click += (_, _) => _togglePause();
+                menu.Items.Add(pause);
+            }
+
+            if (_createHistoryMenu != null)
+            {
+                menu.Items.Add(_createHistoryMenu());
+            }
+
+            menu.Items.Add(new ToolStripSeparator());
+
             var openData = new ToolStripMenuItem("データフォルダを開く(&D)");
             openData.Click += (_, _) => OpenDataFolder();
             menu.Items.Add(openData);
-
-            if (_createHistoryMenu != null)
-                menu.Items.Add(_createHistoryMenu());
 
             var exit = new ToolStripMenuItem("終了(&X)");
             exit.Click += (_, _) => _shutdown?.Invoke();
@@ -83,12 +103,11 @@ namespace at365.WallpaperSlideshow
             _notifyIcon.ContextMenuStrip = menu;
         }
 
-        public void UpdateIcon()
+        public void UpdateIcon(bool paused)
         {
             if (_notifyIcon == null || _iconRunning == null || _iconPaused == null)
                 return;
 
-            bool paused = _getPausedState?.Invoke() ?? false;
             _notifyIcon.Icon = paused ? _iconPaused : _iconRunning;
         }
 

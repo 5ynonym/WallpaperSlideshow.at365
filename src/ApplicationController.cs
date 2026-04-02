@@ -35,7 +35,8 @@ namespace at365.WallpaperSlideshow
 
             TrayIconManager.Instance.Initialize(
                 config,
-                getPausedState: () => _paused,
+                leftClickAction: null,
+                middleClickAction: null,
                 togglePause: () => TogglePause(),
                 createHistoryMenu: HistoryManager.Instance.CreateHistoryMenu,
                 shutdown: ApplicationShutdown
@@ -122,12 +123,10 @@ namespace at365.WallpaperSlideshow
         public void TogglePause(bool? forceState = null)
         {
             bool target = forceState ?? !_paused;
-
             if (!target)
             {
                 _uiTimer!.Start();
                 _paused = false;
-                TrayIconManager.Instance.UpdateIcon();
                 InitializeApplication(true);
             }
             else
@@ -135,8 +134,9 @@ namespace at365.WallpaperSlideshow
                 _uiTimer!.Stop();
                 _paused = true;
                 WallpaperController.Instance.ClearWallpaper();
-                TrayIconManager.Instance.UpdateIcon();
             }
+
+            TrayIconManager.Instance.UpdateIcon(_paused);
         }
 
         private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
