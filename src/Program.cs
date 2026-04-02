@@ -11,7 +11,8 @@ public static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
-        ApplicationController.Instance.Initialize(config);
-        Application.Run();
+        var dispatcherForm = DispatcherForm.Instance;
+        ApplicationController.Instance.Initialize(config, dispatcherForm);
+        Application.Run(dispatcherForm);
     }
 }

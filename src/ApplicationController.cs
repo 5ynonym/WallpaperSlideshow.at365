@@ -13,14 +13,11 @@ namespace at365.WallpaperSlideshow
 
         private FileSystemWatcher? _configWatcher;
         private System.Threading.Timer? _configDebounce;
-
-        private Config? _config;
-        private bool _paused = false;
-
         private FolderWatcher? _folderWatcher;
-        private System.Threading.Timer? _timer;
+        private System.Windows.Forms.Timer? _uiTimer;
         private Rectangle[]? _lastMonitorBounds;
 
+        private bool _paused = false;
         private bool _disposed;
 
         private ApplicationController() { }
@@ -28,7 +25,7 @@ namespace at365.WallpaperSlideshow
         // ============================================================
         // 初期化
         // ============================================================
-        public void Initialize(Config config)
+        public void Initialize(Config config, DispatcherForm dispatcherForm)
         {
             EnsureSingleInstance();
             SetWallpaperSpanMode();
@@ -38,11 +35,8 @@ namespace at365.WallpaperSlideshow
             SystemEvents.SessionSwitch += OnSessionSwitch;
             SystemEvents.SessionEnding += OnSessionEnding;
 
-            var rdpForm = new RdpWatcherForm();
-            rdpForm.OnRdpConnect = () => TogglePause(true);
-            rdpForm.OnRdpDisconnect = () => TogglePause(false);
-            rdpForm.CreateControl();
-            rdpForm.Show();
+            dispatcherForm.OnRdpConnect = () => TogglePause(true);
+            dispatcherForm.OnRdpDisconnect = () => TogglePause(false);
 
             TrayIconManager.Instance.Initialize(
                 config,
@@ -54,7 +48,7 @@ namespace at365.WallpaperSlideshow
 
             _folderWatcher = new FolderWatcher(
                 config.Monitors.Select(m => m.Folder),
-                () => InitializeApplication(true)
+                () => dispatcherForm.BeginInvoke(() => InitializeApplication(true))
             );
 
             SetupConfigWatcher();
@@ -62,29 +56,19 @@ namespace at365.WallpaperSlideshow
 
         private void ApplyConfig(Config config)
         {
-            _config = config;
-
             WallpaperRenderer.Instance.SetConfig(config);
             HistoryManager.Instance.SetConfig(config);
             QueueManager.Instance.SetConfig(config);
             WallpaperController.Instance.Initialize(config);
 
-            if (_timer == null)
+            if (_uiTimer == null)
             {
-                _timer = new System.Threading.Timer(
-                    _ => WallpaperController.Instance.UpdateWallpaper(),
-                    null,
-                    config.IntervalSeconds * 1000,
-                    config.IntervalSeconds * 1000
-                );
+                _uiTimer = new System.Windows.Forms.Timer();
+                _uiTimer.Tick += (_, _) => WallpaperController.Instance.UpdateWallpaper();
             }
-            else
-            {
-                _timer.Change(
-                    config.IntervalSeconds * 1000,
-                    config.IntervalSeconds * 1000
-                );
-            }
+
+            _uiTimer.Interval = config.IntervalSeconds * 1000;
+            _uiTimer.Start();
 
             QueueManager.Instance.Initialize(StableScreensProvider.Screens);
             HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
@@ -152,14 +136,14 @@ namespace at365.WallpaperSlideshow
 
             if (!target)
             {
-                _timer!.Change(0, _config!.IntervalSeconds * 1000);
+                _uiTimer!.Start();
                 _paused = false;
                 TrayIconManager.Instance.UpdateIcon();
                 InitializeApplication(true);
             }
             else
             {
-                _timer!.Change(Timeout.Infinite, Timeout.Infinite);
+                _uiTimer!.Stop();
                 _paused = true;
                 TrayIconManager.Instance.UpdateIcon();
                 WallpaperController.Instance.ClearWallpaper();
@@ -261,7 +245,7 @@ namespace at365.WallpaperSlideshow
             if (_disposed) return;
             _disposed = true;
 
-            try { _timer?.Dispose(); } catch { }
+            try { _uiTimer?.Dispose(); } catch { }
             try { _folderWatcher?.Dispose(); } catch { }
             try { TrayIconManager.Instance.Dispose(); } catch { }
         }
