@@ -38,11 +38,18 @@ namespace at365.WallpaperSlideshow
             SystemEvents.SessionSwitch += OnSessionSwitch;
             SystemEvents.SessionEnding += OnSessionEnding;
 
+            var rdpForm = new RdpWatcherForm();
+            rdpForm.OnRdpConnect = () => TogglePause(true);
+            rdpForm.OnRdpDisconnect = () => TogglePause(false);
+            rdpForm.CreateControl();
+            rdpForm.Show();
+
             TrayIconManager.Instance.Initialize(
                 config,
                 getPausedState: () => _paused,
                 togglePause: () => TogglePause(),
-                createHistoryMenu: HistoryManager.Instance.CreateHistoryMenu
+                createHistoryMenu: HistoryManager.Instance.CreateHistoryMenu,
+                shutdown: ApplicationShutdown
             );
 
             _folderWatcher = new FolderWatcher(
@@ -92,6 +99,8 @@ namespace at365.WallpaperSlideshow
             bool monitorChanged = HasMonitorConfigChanged();
             if (!monitorChanged && !forceInitialize)
                 return;
+
+            StableScreensProvider.Refresh();
 
             QueueManager.Instance.Initialize(StableScreensProvider.Screens);
             HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
@@ -146,7 +155,7 @@ namespace at365.WallpaperSlideshow
                 _timer!.Change(0, _config!.IntervalSeconds * 1000);
                 _paused = false;
                 TrayIconManager.Instance.UpdateIcon();
-                InitializeApplication();
+                InitializeApplication(true);
             }
             else
             {
@@ -188,14 +197,14 @@ namespace at365.WallpaperSlideshow
                 .ThenBy(s => s.Bounds.Top)
                 .ToArray();
 
-            var bounds = screens.Select(s => s.Bounds).ToArray();
-
             if (_lastMonitorBounds == null ||
-                _lastMonitorBounds.Length != bounds.Length)
+                _lastMonitorBounds.Length != screens.Length)
             {
-                _lastMonitorBounds = bounds;
+                _lastMonitorBounds = screens.Select(s => s.Bounds).ToArray();
                 return true;
             }
+
+            var bounds = screens.Select(s => s.Bounds).ToArray();
 
             for (int i = 0; i < bounds.Length; i++)
             {
@@ -236,6 +245,12 @@ namespace at365.WallpaperSlideshow
                     try { p.Kill(); } catch { }
                 }
             }
+        }
+
+        private static void ApplicationShutdown()
+        {
+            WallpaperController.Instance.ClearWallpaper();
+            Application.Exit();
         }
 
         // ============================================================

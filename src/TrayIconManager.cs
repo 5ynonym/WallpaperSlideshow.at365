@@ -18,6 +18,7 @@ namespace at365.WallpaperSlideshow
         private Func<bool>? _getPausedState;
         private Action? _togglePause;
         private Func<ToolStripMenuItem>? _createHistoryMenu;
+        private Action? _shutdown;
 
         private bool _disposed;
 
@@ -30,12 +31,14 @@ namespace at365.WallpaperSlideshow
             Config config,
             Func<bool> getPausedState,
             Action togglePause,
-            Func<ToolStripMenuItem> createHistoryMenu)
+            Func<ToolStripMenuItem> createHistoryMenu,
+            Action shutdown)
         {
             _config = config;
             _getPausedState = getPausedState;
             _togglePause = togglePause;
             _createHistoryMenu = createHistoryMenu;
+            _shutdown = shutdown;
 
             _iconRunning = new Icon("running.ico");
             _iconPaused = new Icon("paused.ico");
@@ -86,11 +89,13 @@ namespace at365.WallpaperSlideshow
                 menu.Items.Add(_createHistoryMenu());
 
             var exit = new ToolStripMenuItem("終了(&X)");
-            exit.Click += (_, _) => Application.Exit();
+            exit.Click += (_, _) => _shutdown?.Invoke();
             menu.Items.Add(exit);
 
             _notifyIcon.ContextMenuStrip = menu;
         }
+
+        
 
         // ------------------------------------------------------------
         // アイコン更新
