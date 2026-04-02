@@ -1,4 +1,5 @@
 ﻿using System.Drawing.Imaging;
+using System.Reflection;
 
 namespace at365.WallpaperSlideshow
 {
@@ -17,14 +18,21 @@ namespace at365.WallpaperSlideshow
             _config = config;
         }
 
-        public Image LoadImageWithoutLock(string path)
+        public static Image? LoadImageWithoutLock(string path)
         {
-            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var ms = new MemoryStream();
-            fs.CopyTo(ms);
-            ms.Position = 0;
-            return Image.FromStream(ms);
+            try
+            {
+                if (!File.Exists(path)) return null;
+
+                var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                return Image.FromStream(fs, false, false);
+            }
+            catch
+            {
+                return null;
+            }
         }
+
 
         public void ComposeMonitor(
             int monitorIndex,
@@ -51,44 +59,53 @@ namespace at365.WallpaperSlideshow
                 bounds.Height - monitorConfig.PaddingTop - monitorConfig.PaddingBottom
             );
 
-            var mode = monitorConfig.Mode ?? StretchMode.Fit;
+            if (monitorImage != null && !File.Exists(monitorImage)) return;
 
+            var mode = monitorConfig.Mode ?? StretchMode.Fit;
             if (mode == StretchMode.Tile)
             {
-                if (monitorImage == null) return;
-
-                var paths = new List<string> { monitorImage };
-                pushHistory(monitorIndex, monitorImage);
+                var paths = new List<string>();
+                if (monitorImage != null && File.Exists(monitorImage))
+                {
+                    paths.Add(monitorImage);
+                    pushHistory(monitorIndex, monitorImage);
+                }
 
                 while (paths.Count < monitorConfig.TileCount && queue.Count > 0)
                 {
                     var next = queue.Dequeue();
-                    if (next != null)
+                    if (next != null && File.Exists(next))
                     {
                         paths.Add(next);
                         pushHistory(monitorIndex, next);
                     }
                 }
 
-                var imgs = paths.Select(LoadImageWithoutLock).ToArray();
+                if(paths.Count == 0) return;
+
+                var imgs = paths.Select(LoadImageWithoutLock).Where(im => im != null).Cast<Image>().ToArray();
+                if (imgs.Length == 0) return;
+
                 DrawTile(gMain, imgs, drawRect);
 
                 foreach (var im in imgs)
+                {
                     im.Dispose();
-
-                return;
+                }
             }
-
-            if (monitorImage == null) return;
-
-            try
+            else
             {
-                using var img = LoadImageWithoutLock(monitorImage);
-                DrawImageWithMode(gMain, img, drawRect, mode);
-                pushHistory(monitorIndex, monitorImage);
-            }
-            catch
-            {
+                if (monitorImage == null) return;
+
+                try
+                {
+                    using var img = LoadImageWithoutLock(monitorImage);
+                    if (img == null) return;
+
+                    DrawImageWithMode(gMain, img, drawRect, mode);
+                    pushHistory(monitorIndex, monitorImage);
+                }
+                catch { }
             }
         }
 
@@ -183,9 +200,7 @@ namespace at365.WallpaperSlideshow
                     unusedWidth += Math.Max(0, rect.Width - rowWidth);
                 }
 
-                // 縦の余白を優先して減らす
                 float score = unusedHeight * 3f + unusedWidth;
-
                 if (score < bestScore)
                 {
                     bestScore = score;
@@ -214,7 +229,7 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        private Image[][] SplitRowsAspectBalanced(Image[] images, int rows)
+        private static Image[][] SplitRowsAspectBalanced(Image[] images, int rows)
         {
             var result = new List<Image>[rows];
             for (int i = 0; i < rows; i++)
@@ -232,26 +247,33 @@ namespace at365.WallpaperSlideshow
             return result.Select(r => r.ToArray()).ToArray();
         }
 
-        private float CalcRowHeightNoOverlap(Image[] row, int totalWidth)
+        private static float CalcRowHeightNoOverlap(Image[] row, int totalWidth)
         {
             float sumAspect = row.Sum(im => (float)im.Width / im.Height);
             float h = totalWidth / sumAspect;
             return AdjustHeight(row, totalWidth, h);
         }
 
-        private float AdjustHeight(Image[] row, int totalWidth, float h)
+        private static float AdjustHeight(Image[] row, int totalWidth, float h)
         {
-            float width = 0;
-            foreach (var img in row)
-                width += (img.Width / (float)img.Height) * h;
+            const int MAX_ITER = 200;
 
-            if (width <= totalWidth)
-                return h;
+            for (int i = 0; i < MAX_ITER; i++)
+            {
+                float width = 0;
+                foreach (var img in row)
+                    width += (img.Width / (float)img.Height) * h;
 
-            if (h < 1)
-                return -1;
+                if (width <= totalWidth)
+                    return h;
 
-            return AdjustHeight(row, totalWidth, h * 0.95f);
+                h *= 0.95f;
+
+                if (h < 1f)
+                    return -1f;
+            }
+
+            return -1f;
         }
 
         private void DrawRowNoOverlap_WithVisualMargin(Graphics g, Image[] row, Rectangle rect, float rowHeight, float y)
@@ -262,37 +284,34 @@ namespace at365.WallpaperSlideshow
             if (gapX < 0) gapX = 0;
 
             float x = rect.Left + gapX;
-
             for (int i = 0; i < row.Length; i++)
             {
                 float w = widths[i];
                 var layoutRect = new RectangleF(x, y, w, rowHeight);
                 var margin = _config.TileMargin / 2;
                 var inner = RectangleF.Inflate(layoutRect, -margin, -margin);
+                if (inner.Width <= 0 || inner.Height <= 0) continue;
 
                 DrawImageFit(g, row[i], Rectangle.Round(inner));
                 x += w + gapX;
             }
+        }
 
-            void DrawImageFit(Graphics g, Image img, Rectangle rect)
-            {
-                float s = Math.Min((float)rect.Width / img.Width, (float)rect.Height / img.Height);
-                int w = (int)(img.Width * s);
-                int h = (int)(img.Height * s);
-                int x = rect.Left + (rect.Width - w) / 2;
-                int y = rect.Top + (rect.Height - h) / 2;
-                g.DrawImage(img, new Rectangle(x, y, w, h));
-            }
+        private static void DrawImageFit(Graphics g, Image img, Rectangle rect)
+        {
+            if (rect.Width <= 0 || rect.Height <= 0) return;
+
+            float s = Math.Min((float)rect.Width / img.Width, (float)rect.Height / img.Height);
+            int w = (int)(img.Width * s);
+            int h = (int)(img.Height * s);
+            int x = rect.Left + (rect.Width - w) / 2;
+            int y = rect.Top + (rect.Height - h) / 2;
+            g.DrawImage(img, new Rectangle(x, y, w, h));
         }
 
         public void OverwriteWithBlack(string targetPath)
         {
             try { _empty.Save(targetPath, ImageFormat.Bmp); } catch { }
-        }
-
-        public List<string> Shuffle(List<string> list)
-        {
-            return list.OrderBy(_ => Random.Shared.Next()).ToList();
         }
     }
 }
