@@ -7,7 +7,7 @@ namespace at365.WallpaperSlideshow
         public static WallpaperRenderer Instance => _lazy.Value;
         private static readonly Lazy<WallpaperRenderer> _lazy = new(() => new WallpaperRenderer());
 
-        private Config? _config;
+        private Config _config;
         private static readonly Bitmap _empty = new(1, 1);
 
         private WallpaperRenderer() { }
@@ -35,8 +35,7 @@ namespace at365.WallpaperSlideshow
             Queue<string> queue,
             Action<int, string> pushHistory)
         {
-            if (monitorIndex < 0 || monitorIndex >= screens.Length)
-                return;
+            if (monitorIndex < 0 || monitorIndex >= screens.Length) return;
 
             var monitorConfig = (monitorIndex < _config.Monitors.Count)
                 ? _config.Monitors[monitorIndex]
@@ -56,11 +55,7 @@ namespace at365.WallpaperSlideshow
 
             if (mode == StretchMode.Tile)
             {
-                if (monitorImage == null)
-                {
-                    gMain.FillRectangle(Brushes.Black, drawRect);
-                    return;
-                }
+                if (monitorImage == null) return;
 
                 var paths = new List<string> { monitorImage };
                 pushHistory(monitorIndex, monitorImage);
@@ -84,11 +79,7 @@ namespace at365.WallpaperSlideshow
                 return;
             }
 
-            if (monitorImage == null)
-            {
-                gMain.FillRectangle(Brushes.Black, drawRect);
-                return;
-            }
+            if (monitorImage == null) return;
 
             try
             {
@@ -98,13 +89,9 @@ namespace at365.WallpaperSlideshow
             }
             catch
             {
-                gMain.FillRectangle(Brushes.Black, drawRect);
             }
         }
 
-        // ============================================================
-        // StretchMode 描画
-        // ============================================================
         public void DrawImageWithMode(Graphics g, Image img, Rectangle drawRect, StretchMode mode)
         {
             switch (mode)
@@ -151,9 +138,6 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        // ============================================================
-        // タイル描画
-        // ============================================================
         public void DrawTile(Graphics g, Image[] images, Rectangle rect)
         {
             int bestRows = -1;
@@ -199,10 +183,8 @@ namespace at365.WallpaperSlideshow
                     unusedWidth += Math.Max(0, rect.Width - rowWidth);
                 }
 
-                float score = unusedHeight + unusedWidth;
-
-                if (rowCount == 1)
-                    score *= 5f;
+                // 縦の余白を優先して減らす
+                float score = unusedHeight * 3f + unusedWidth;
 
                 if (score < bestScore)
                 {
@@ -291,16 +273,16 @@ namespace at365.WallpaperSlideshow
                 DrawImageFit(g, row[i], Rectangle.Round(inner));
                 x += w + gapX;
             }
-        }
 
-        private void DrawImageFit(Graphics g, Image img, Rectangle rect)
-        {
-            float s = Math.Min((float)rect.Width / img.Width, (float)rect.Height / img.Height);
-            int w = (int)(img.Width * s);
-            int h = (int)(img.Height * s);
-            int x = rect.Left + (rect.Width - w) / 2;
-            int y = rect.Top + (rect.Height - h) / 2;
-            g.DrawImage(img, new Rectangle(x, y, w, h));
+            void DrawImageFit(Graphics g, Image img, Rectangle rect)
+            {
+                float s = Math.Min((float)rect.Width / img.Width, (float)rect.Height / img.Height);
+                int w = (int)(img.Width * s);
+                int h = (int)(img.Height * s);
+                int x = rect.Left + (rect.Width - w) / 2;
+                int y = rect.Top + (rect.Height - h) / 2;
+                g.DrawImage(img, new Rectangle(x, y, w, h));
+            }
         }
 
         public void OverwriteWithBlack(string targetPath)
