@@ -67,21 +67,26 @@ namespace at365.WallpaperSlideshow
             // ------------------------------------------------------------
             // 壁紙ファイル保存
             // ------------------------------------------------------------
-            try { bmp.Save(Const.WallpaperPicturePath, ImageFormat.Bmp); } catch { }
-
-            ApplyWallpaper();
-            WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
+            try
+            {
+                bmp.Save(Const.WallpaperPicturePath, ImageFormat.Bmp);
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, Const.WallpaperPicturePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+            }
+            catch { }
+            finally
+            {
+                WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
+            }
         }
 
         // ============================================================
-        // 壁紙適用
+        // 壁紙をクリア
         // ============================================================
-        public void ApplyWallpaper()
+        public void ClearWallpaper()
         {
             try
             {
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, Const.WallpaperPicturePath,
-                    SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, string.Empty, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
             catch { }
         }

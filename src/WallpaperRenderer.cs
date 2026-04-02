@@ -319,10 +319,12 @@ namespace at365.WallpaperSlideshow
         // ============================================================
         public void OverwriteWithBlack(string targetPath)
         {
-            using var bmp = new Bitmap(1, 1);
-            using var g = Graphics.FromImage(bmp);
-            g.FillRectangle(Brushes.Black, new Rectangle(0, 0, 1, 1));
-            bmp.Save(targetPath, ImageFormat.Bmp);
+            try
+            {
+                using var bmp = new Bitmap(1, 1);
+                bmp.Save(targetPath, ImageFormat.Bmp);
+            }
+            catch { }
         }
 
         // ============================================================

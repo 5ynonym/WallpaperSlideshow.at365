@@ -153,7 +153,7 @@ namespace at365.WallpaperSlideshow
                 _timer!.Change(Timeout.Infinite, Timeout.Infinite);
                 _paused = true;
                 TrayIconManager.Instance.UpdateIcon();
-                WallpaperController.Instance.ApplyWallpaper();
+                WallpaperController.Instance.ClearWallpaper();
             }
         }
 
