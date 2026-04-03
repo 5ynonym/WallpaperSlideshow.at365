@@ -78,7 +78,6 @@ namespace at365.WallpaperSlideshow
                     if (next != null && File.Exists(next))
                     {
                         paths.Add(next);
-                        pushHistory(monitorIndex, next);
                     }
                 }
 
