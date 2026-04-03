@@ -85,14 +85,21 @@ namespace at365.WallpaperSlideshow
 
                 if(paths.Count == 0) return;
 
-                var imgs = paths.Select(LoadImageWithoutLock).Where(im => im != null).Cast<Image>().ToArray();
-                if (imgs.Length == 0) return;
-
-                DrawTile(gMain, imgs, drawRect);
-
-                foreach (var im in imgs)
+                Image[]? imgs = null;
+                try
                 {
-                    im.Dispose();
+                    imgs = paths.Select(LoadImageWithoutLock).Where(im => im != null).Cast<Image>().ToArray();
+                    if (imgs.Length == 0) return;
+
+                    DrawTile(gMain, imgs, drawRect);
+                }
+                finally
+                {
+                    if (imgs != null)
+                    {
+                        foreach (var im in imgs)
+                            im.Dispose();
+                    }
                 }
             }
             else
