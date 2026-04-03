@@ -24,15 +24,17 @@ namespace at365.WallpaperSlideshow
             {
                 if (!File.Exists(path)) return null;
 
-                var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                return Image.FromStream(fs, false, false);
+                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var ms = new MemoryStream();
+                fs.CopyTo(ms);
+                ms.Position = 0;
+                return Image.FromStream(ms);
             }
             catch
             {
                 return null;
             }
         }
-
 
         public void ComposeMonitor(
             int monitorIndex,
