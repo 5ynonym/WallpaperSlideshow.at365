@@ -1,5 +1,5 @@
 ﻿using System.Drawing.Imaging;
-using System.Reflection;
+using Image = System.Drawing.Image;
 
 namespace at365.WallpaperSlideshow
 {
@@ -70,7 +70,6 @@ namespace at365.WallpaperSlideshow
                 if (monitorImage != null && File.Exists(monitorImage))
                 {
                     paths.Add(monitorImage);
-                    pushHistory(monitorIndex, monitorImage);
                 }
 
                 while (paths.Count < monitorConfig.TileCount && queue.Count > 0)
@@ -83,22 +82,30 @@ namespace at365.WallpaperSlideshow
                     }
                 }
 
-                if(paths.Count == 0) return;
+                if (paths.Count == 0) return;
 
-                Image[]? imgs = null;
+                List<Image> images = new(paths.Count);
                 try
                 {
-                    imgs = paths.Select(LoadImageWithoutLock).Where(im => im != null).Cast<Image>().ToArray();
-                    if (imgs.Length == 0) return;
+                    foreach (var path in paths)
+                    {
+                        var image = LoadImageWithoutLock(path);
+                        if (image == null) continue;
 
-                    DrawTile(gMain, imgs, drawRect);
+                        images.Add(image);
+                        pushHistory(monitorIndex, path);
+                    }
+
+                    if (images.Count > 0)
+                    {
+                        DrawTile(gMain, images.ToArray(), drawRect);
+                    }
                 }
                 finally
                 {
-                    if (imgs != null)
+                    foreach (var im in images)
                     {
-                        foreach (var im in imgs)
-                            im.Dispose();
+                        im.Dispose();
                     }
                 }
             }
