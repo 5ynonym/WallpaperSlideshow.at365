@@ -6,7 +6,6 @@
         private readonly Action _onChanged;
 
         private readonly object _lock = new();
-        private System.Threading.Timer? _debounceTimer;
         private bool _disposed = false;
 
         public FolderWatcher(IEnumerable<string?> folders, Action onChanged)
@@ -64,9 +63,6 @@
                 try { w.Dispose(); }
                 catch { }
             }
-
-            try { _debounceTimer?.Dispose(); }
-            catch { }
         }
     }
 }
