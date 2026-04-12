@@ -96,7 +96,6 @@ namespace at365.WallpaperSlideshow
                 return;
 
             StableScreensProvider.Refresh();
-
             QueueManager.Instance.Initialize(StableScreensProvider.Screens);
             HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
             WallpaperController.Instance.UpdateWallpaper();
@@ -152,7 +151,7 @@ namespace at365.WallpaperSlideshow
             {
                 _uiTimer!.Stop();
                 _paused = true;
-                WallpaperController.Instance.ClearWallpaper();
+                WallpaperController.ClearWallpaper();
             }
 
             TrayIconManager.Instance.UpdateIcon(_paused);
@@ -225,7 +224,7 @@ namespace at365.WallpaperSlideshow
 
         private static void ApplicationShutdown()
         {
-            WallpaperController.Instance.ClearWallpaper();
+      WallpaperController.ClearWallpaper();
             Application.Exit();
         }
 

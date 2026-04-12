@@ -22,7 +22,6 @@ namespace at365.WallpaperSlideshow
         public void UpdateWallpaper()
         {
             var screens = StableScreensProvider.Screens;
-            QueueManager.Instance.Initialize(screens);
             HistoryManager.Instance.EnsureInitialized(screens);
 
             string?[] monitorImages = new string?[screens.Length];
@@ -64,12 +63,11 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        public void ClearWallpaper()
+        public static void ClearWallpaper()
         {
             try
             {
-                WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, Const.WallpaperPicturePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, string.Empty, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
             catch { }
         }
