@@ -57,6 +57,10 @@ namespace at365.WallpaperSlideshow
                 SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, Const.WallpaperPicturePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
             }
             catch { }
+            finally
+            {
+                WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
+            }
         }
 
         public static void ClearWallpaper()
