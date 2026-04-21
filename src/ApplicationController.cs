@@ -222,7 +222,7 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        private static void ApplicationShutdown()
+        public static void ApplicationShutdown()
         {
       WallpaperController.ClearWallpaper();
             Application.Exit();

@@ -23,6 +23,12 @@ public sealed class DispatcherForm : Form
     private const int WTS_SESSION_REMOTE_CONNECT = 0x03;
     private const int WTS_SESSION_REMOTE_DISCONNECT = 0x04;
 
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        at365.WallpaperSlideshow.ApplicationController.ApplicationShutdown();
+    }
+
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
