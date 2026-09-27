@@ -11,7 +11,8 @@ namespace at365.WallpaperSlideshow
         private Config _config = new(); // Initialize to avoid null reference
         private static readonly Bitmap _empty = new(1, 1, PixelFormat.Format1bppIndexed);
 
-        private WallpaperRenderer() { }
+        internal WallpaperRenderer() { }
+        internal CancellationToken Cancellation { get; set; }
 
         public void SetConfig(Config config)
         {
@@ -34,15 +35,15 @@ namespace at365.WallpaperSlideshow
             string? monitorImage,
             Graphics gMain,
             Rectangle virtualBounds,
-            Screen[] screens,
+            Rectangle[] screens,
             Queue<string> queue,
             Action<int, string> pushHistory)
         {
             if (monitorIndex < 0 || monitorIndex >= screens.Length) return;
 
             var monitorConfig = GetMonitorConfig(monitorIndex);
-            var screen = screens[monitorIndex];
-            var bounds = screen.Bounds;
+            Cancellation.ThrowIfCancellationRequested();
+            var bounds = screens[monitorIndex];
 
             var drawRect = CalculateDrawRectangle(bounds, virtualBounds, monitorConfig);
             if (drawRect.Width <= 0 || drawRect.Height <= 0) return;
@@ -130,13 +131,14 @@ namespace at365.WallpaperSlideshow
             return paths;
         }
 
-        private static List<Image> LoadImages(List<string> paths, int monitorIndex, Action<int, string> pushHistory)
+        private List<Image> LoadImages(List<string> paths, int monitorIndex, Action<int, string> pushHistory)
         {
             var images = new List<Image>();
             try
             {
                 foreach (var path in paths)
                 {
+                    Cancellation.ThrowIfCancellationRequested();
                     var image = LoadImageWithoutLock(path);
                     if (image != null)
                     {

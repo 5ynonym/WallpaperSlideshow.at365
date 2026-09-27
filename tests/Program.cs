@@ -6,23 +6,33 @@ using at365.WallpaperSlideshow;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--temporary-exit")
+        {
+            var output = new WallpaperController.RenderedWallpaper(args[1], [], 0);
+            var stream = output.CreateOutput();
+            stream.Write(new byte[16]);
+            stream.Flush();
+            Environment.Exit(0); // Exercise ProcessExit with an open output stream.
+        }
         var originalData = Const.AppDataFolder;
         var testData = Path.Combine(Path.GetTempPath(), "WallpaperTests-" + Guid.NewGuid());
         Directory.CreateDirectory(testData);
         Const.AppDataFolder = testData;
         try
         {
-        ValidateConfiguration();
-        KeepLastValidConfiguration();
-        PreservePauseReasons();
-        ClipDrawing();
-        LoadDetachedImages();
-        DisposeHistoryResources();
-        CloseHistoryMenus();
-        RecoveryTests.Run(testData);
-        Console.WriteLine("PASS: configuration, pause reasons, drawing clips, detached images, history resources");
+            ValidateConfiguration();
+            ValidateReadme();
+            KeepLastValidConfiguration();
+            PreservePauseReasons();
+            ClipDrawing();
+            LoadDetachedImages();
+            DisposeHistoryResources();
+            CloseHistoryMenus();
+            AsyncTests.Run(testData);
+            RecoveryTests.Run(testData);
+            Console.WriteLine("PASS: configuration, pause reasons, drawing clips, detached images, history resources");
         }
         finally
         {
@@ -68,6 +78,19 @@ internal static class Program
         catch (InvalidDataException) { }
         config.Monitors[0].PaddingLeft = 99;
         config.Validate([new Rectangle(0, 0, 100, 100)]);
+    }
+
+    private static void ValidateReadme()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "WallpaperSlideshow.at365.csproj")))
+            directory = directory.Parent;
+        Check(directory != null, "Repository root not found");
+        var text = File.ReadAllText(Path.Combine(directory!.FullName, "README.md"));
+        var example = System.Text.RegularExpressions.Regex.Match(text, "```json\\s*(.*?)```",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        Check(example.Success, "README config example missing");
+        Config.Parse(example.Groups[1].Value);
     }
 
     private static void KeepLastValidConfiguration()

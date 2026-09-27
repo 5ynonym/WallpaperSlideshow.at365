@@ -1,0 +1,19 @@
+name: Build and regression tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet build WallpaperSlideshow.at365.slnx -c Release
+      - run: dotnet run --project tests/WallpaperSlideshow.RegressionTests.csproj -c Release --no-build
+      - run: .\publish.bat
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WallpaperSlideshow-win-x64
+          path: publish/WallpaperSlideshow.at365.exe

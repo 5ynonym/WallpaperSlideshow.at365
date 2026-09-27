@@ -16,7 +16,8 @@ namespace at365.WallpaperSlideshow
         private readonly List<string?> _lastImages = new();
         private Config? _config;
 
-        private QueueManager() { }
+        internal QueueManager() { }
+        internal CancellationToken Cancellation { get; set; }
 
         public void SetConfig(Config config)
         {
@@ -31,9 +32,9 @@ namespace at365.WallpaperSlideshow
             ReplaceQueues(Prepare(_config, screens.Length));
         }
 
-        internal static List<Queue<string>> Prepare(Config config, int count)
+        internal static List<Queue<string>> Prepare(Config config, int count, CancellationToken cancellation = default)
         {
-            return Enumerable.Range(0, count).Select(i => BuildQueueForMonitor(config, i)).ToList();
+            return Enumerable.Range(0, count).Select(i => BuildQueueForMonitor(config, i, cancellation)).ToList();
         }
 
         internal void ReplaceQueues(List<Queue<string>> queues)
@@ -88,10 +89,10 @@ namespace at365.WallpaperSlideshow
             if (_config == null)
                 throw new InvalidOperationException("QueueManager.SetConfig() が呼ばれていません");
 
-            return BuildQueueForMonitor(_config, index);
+            return BuildQueueForMonitor(_config, index, Cancellation);
         }
 
-        private static Queue<string> BuildQueueForMonitor(Config config, int index)
+        private static Queue<string> BuildQueueForMonitor(Config config, int index, CancellationToken cancellation = default)
         {
             string? folder = (index < config.Monitors.Count)
                 ? config.Monitors[index].Folder
@@ -101,7 +102,7 @@ namespace at365.WallpaperSlideshow
 
             if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
             {
-                files = ImageCatalog.Scan(folder);
+                files = ImageCatalog.Scan(folder, cancellation: cancellation);
             }
 
             return new Queue<string>(Shuffle(files));

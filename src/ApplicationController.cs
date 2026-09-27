@@ -15,6 +15,9 @@ namespace at365.WallpaperSlideshow
         private System.Windows.Forms.Timer? _maintenanceTimer;
         private int _maintenanceTicks;
         private FolderWatcher? _folderWatcher;
+        private Config? _watcherConfig;
+        private Config? _activeWatcherConfig;
+        private Task? _watcherTask;
         private System.Windows.Forms.Timer? _uiTimer;
         private Rectangle[]? _lastMonitorBounds;
 
@@ -30,6 +33,8 @@ namespace at365.WallpaperSlideshow
         public void Initialize(Config config, DispatcherForm dispatcherForm)
         {
             _dispatcher = dispatcherForm;
+            _ = dispatcherForm.Handle;
+            WallpaperController.Instance.Attach(dispatcherForm);
             EnsureSingleInstance();
             _pauseState.Remote = SystemInformation.TerminalServerSession;
             _paused = _pauseState.IsPaused;
@@ -37,7 +42,6 @@ namespace at365.WallpaperSlideshow
             SetWallpaperSpanMode();
             InitializeApplication();
 
-            _ = dispatcherForm.Handle;
             SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
             dispatcherForm.OnRdpConnect = () => SetRemotePause(true);
@@ -87,7 +91,7 @@ namespace at365.WallpaperSlideshow
                 if (++_maintenanceTicks >= 5)
                 {
                     _maintenanceTicks = 0;
-                    _folderWatcher?.Refresh();
+                    RefreshWatchers();
                 }
             };
             _maintenanceTimer.Start();
@@ -97,21 +101,36 @@ namespace at365.WallpaperSlideshow
         {
             var screens = StableScreensProvider.Screens;
             config.Validate(screens.Select(s => s.Bounds));
-            // Prepare fallible work before replacing any active configuration.
-            var queues = QueueManager.Prepare(config, screens.Length);
-            var watcher = new FolderWatcher(config.Monitors.Select(m => m.Folder),
-                () => Interlocked.Exchange(ref _requiredInitialize, 1));
-
             WallpaperRenderer.Instance.SetConfig(config);
             WallpaperController.Instance.Initialize(config);
-            QueueManager.Instance.SetConfig(config);
-            QueueManager.Instance.ReplaceQueues(queues);
             HistoryManager.Instance.SetConfig(config);
             HistoryManager.Instance.EnsureInitialized(screens);
-            var previousWatcher = _folderWatcher;
-            _folderWatcher = watcher;
-            previousWatcher?.Dispose();
+            _watcherConfig = config;
+            RefreshWatchers();
             if (_uiTimer != null) _uiTimer.Interval = checked(config.IntervalSeconds * 1000);
+            if (_dispatcher != null && !_pauseState.IsPaused)
+                WallpaperController.Instance.UpdateWallpaper(true);
+        }
+
+        private void RefreshWatchers()
+        {
+            if (_disposed || (_watcherTask != null && !_watcherTask.IsCompleted)) return;
+            var config = _watcherConfig;
+            _watcherTask = Task.Run(() =>
+            {
+                try
+                {
+                    if (!ReferenceEquals(config, _activeWatcherConfig))
+                    {
+                        _folderWatcher?.Dispose();
+                        _folderWatcher = new FolderWatcher(config?.Monitors.Select(m => m.Folder) ?? [],
+                            () => Interlocked.Exchange(ref _requiredInitialize, 1));
+                        _activeWatcherConfig = config;
+                    }
+                    else _folderWatcher?.Refresh();
+                }
+                catch (Exception ex) { AppLog.Error("監視の更新", ex); }
+            });
         }
 
         private void InitializeApplication(bool forceInitialize = false)
@@ -121,10 +140,10 @@ namespace at365.WallpaperSlideshow
                 return;
 
             StableScreensProvider.Refresh();
-            QueueManager.Instance.Initialize(StableScreensProvider.Screens);
+            WallpaperController.Instance.Invalidate();
             HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
             if (!_pauseState.IsPaused)
-                WallpaperController.Instance.UpdateWallpaper();
+                WallpaperController.Instance.UpdateWallpaper(true);
         }
 
         public void TogglePause(bool? forceState = null)
@@ -153,6 +172,7 @@ namespace at365.WallpaperSlideshow
             else
             {
                 _uiTimer?.Stop();
+                WallpaperController.Instance.Invalidate();
                 WallpaperController.ClearWallpaper();
             }
 
@@ -283,7 +303,11 @@ namespace at365.WallpaperSlideshow
             }
             try { _maintenanceTimer?.Dispose(); } catch (Exception ex) { AppLog.Error("設定監視の終了", ex); }
             try { _uiTimer?.Dispose(); } catch (Exception ex) { AppLog.Error("更新タイマーの終了", ex); }
-            try { _folderWatcher?.Dispose(); } catch (Exception ex) { AppLog.Error("フォルダ監視の終了", ex); }
+            WallpaperController.Instance.Dispose();
+            // A slow network probe must not block shutdown. Dispose after it returns.
+            if (_watcherTask != null)
+                _ = _watcherTask.ContinueWith(_ => _folderWatcher?.Dispose(), TaskScheduler.Default);
+            else _folderWatcher?.Dispose();
             try { TrayIconManager.Instance.Dispose(); } catch (Exception ex) { AppLog.Error("トレイの終了", ex); }
         }
     }

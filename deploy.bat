@@ -2,7 +2,11 @@
 setlocal
 
 set "SOURCE=%~dp0publish\WallpaperSlideshow.at365.exe"
-set "TARGET_DIR=%~dp0..\..\00.ESSENTIAL\00.MainTools\WallpaperSlideshow.at365"
+if "%~1"=="" (
+    echo Usage: deploy.bat "destination-directory"
+    exit /b 1
+)
+set "TARGET_DIR=%~f1"
 set "TARGET=%TARGET_DIR%\WallpaperSlideshow.at365.exe"
 
 if not exist "%SOURCE%" (

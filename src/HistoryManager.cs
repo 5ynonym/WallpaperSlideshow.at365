@@ -163,8 +163,10 @@ namespace at365.WallpaperSlideshow
             parent.DropDownDirection = ToolStripDropDownDirection.Left;
 
             var tt = new ToolTip();
+            LatestWorker<string, ThumbnailResult>? thumbnailWorker = null;
             panel.Disposed += (_, _) =>
             {
+                thumbnailWorker?.Dispose();
                 pb.Image = null; // Images belong to the menu cache, not the PictureBox.
                 tt.Dispose();
             };
@@ -173,39 +175,29 @@ namespace at365.WallpaperSlideshow
             tt.SetToolTip(labelRes, path);
             tt.SetToolTip(panel, path);
 
-            parent.DropDownOpened += (_, _) =>
+            void ShowThumbnail((Image? img, string? size, string? res) info)
             {
-                if (!File.Exists(path))
-                {
-                    pb.Image = null;
-                    labelSize.Text = "(ファイルが存在しません)";
-                    labelRes.Text = "";
-                    return;
-                }
-
-                if (!cache.TryGetValue(path, out var info))
-                {
-                    Image? img = null;
-                    string sizeText = "";
-                    string resText = "";
-
-                    img = ImageLoader.Load(path, new Size(thumbWidth, thumbHeight), out var originalSize);
-                    try
-                    {
-                        var fi = new FileInfo(path);
-                        sizeText = $"{fi.Length / 1024f / 1024f:0.00} MB";
-                    }
-                    catch { }
-                    if (!originalSize.IsEmpty)
-                        resText = $"{originalSize.Width}×{originalSize.Height}";
-
-                    info = (img, sizeText, resText);
-                    cache[path] = info;
-                }
-
                 pb.Image = info.img;
                 labelSize.Text = info.size;
                 labelRes.Text = info.res;
+            }
+            thumbnailWorker = new LatestWorker<string, ThumbnailResult>(
+                (file, token) => ThumbnailResult.Load(file, new Size(thumbWidth, thumbHeight), token),
+                action => panel.BeginInvoke(action),
+                result =>
+                {
+                    if (!cache.TryGetValue(path, out var info))
+                        cache[path] = info = (result.TakeImage(), result.SizeText, result.Resolution);
+                    ShowThumbnail(info);
+                });
+            parent.DropDownOpened += (_, _) =>
+            {
+                if (cache.TryGetValue(path, out var info)) ShowThumbnail(info);
+                else
+                {
+                    labelSize.Text = "読み込み中…";
+                    thumbnailWorker.Request(path, replace: false);
+                }
             };
 
             parent.Click += (_, _) =>

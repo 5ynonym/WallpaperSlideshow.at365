@@ -1,94 +1,163 @@
-﻿using System.Drawing.Imaging;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 
-namespace at365.WallpaperSlideshow
+namespace at365.WallpaperSlideshow;
+
+public sealed class WallpaperController : IDisposable
 {
-    public sealed class WallpaperController
+    public static WallpaperController Instance { get; } = new();
+    private Config _config = new();
+    private long _revision;
+    private long _queueRevision = -1;
+    private readonly QueueManager _queues = new(); // Only accessed by the worker.
+    private LatestWorker<RenderRequest, RenderedWallpaper>? _worker;
+    private WallpaperController() { }
+
+    internal sealed record RenderRequest(Config Config, Rectangle[] Bounds, long Revision);
+
+    internal sealed class RenderedWallpaper(string path, List<(int Monitor, string Path)> history,
+        int historyLimit) : IDisposable
     {
-        private static readonly Lazy<WallpaperController> _lazy =
-            new(() => new WallpaperController());
-
-        public static WallpaperController Instance => _lazy.Value;
-
-        private Config _config = new();
-
-        private WallpaperController() { }
-
-        public void Initialize(Config config)
+        private static readonly object FileGate = new();
+        private static readonly HashSet<string> PendingFiles = new();
+        private static bool _exiting;
+        static RenderedWallpaper()
         {
-            _config = config;
+            AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            {
+                lock (FileGate)
+                {
+                    _exiting = true;
+                    foreach (var file in PendingFiles)
+                        try { File.Delete(file); } catch { }
+                    PendingFiles.Clear();
+                }
+            };
         }
-
-        public void UpdateWallpaper()
+        public string Path { get; } = path;
+        public List<(int Monitor, string Path)> History { get; } = history;
+        public int HistoryLimit { get; } = historyLimit;
+        public FileStream CreateOutput()
         {
-            try { UpdateWallpaperCore(); }
-            catch (Exception ex) { AppLog.Error("壁紙の生成・更新", ex); }
-        }
-
-        private void UpdateWallpaperCore()
-        {
-            var screens = StableScreensProvider.Screens;
-            HistoryManager.Instance.EnsureInitialized(screens);
-
-            string?[] monitorImages = new string?[screens.Length];
-            Rectangle virtualBounds = Rectangle.Empty;
-
-            for (int i = 0; i < screens.Length; i++)
+            lock (FileGate)
             {
-                var next = QueueManager.Instance.GetNextImage(i);
-                monitorImages[i] = next;
-                virtualBounds = Rectangle.Union(virtualBounds, screens[i].Bounds);
-            }
-
-            using var bmp = new Bitmap(virtualBounds.Width, virtualBounds.Height);
-            using var gMain = Graphics.FromImage(bmp);
-            gMain.FillRectangle(Brushes.Black, new Rectangle(0, 0, bmp.Width, bmp.Height));
-
-            for (int i = 0; i < screens.Length; i++)
-            {
-                WallpaperRenderer.Instance.ComposeMonitor(
-                    i,
-                    monitorImages[i],
-                    gMain,
-                    virtualBounds,
-                    screens,
-                    QueueManager.Instance.GetQueue(i),
-                    (mon, path) => HistoryManager.Instance.Push(mon, path, _config.History.Limit)
-                );
-            }
-
-            try
-            {
-                bmp.Save(Const.WallpaperPicturePath, ImageFormat.Bmp);
-                SetWallpaper(Const.WallpaperPicturePath);
-            }
-            finally
-            {
-                WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
+                if (_exiting) throw new OperationCanceledException("アプリケーション終了中です。");
+                // Allow ProcessExit to remove even a BMP that is still being written.
+                var stream = new FileStream(Path, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.Read | FileShare.Delete);
+                PendingFiles.Add(Path);
+                return stream;
             }
         }
-
-        public static void ClearWallpaper()
+        public void Dispose()
         {
             try
             {
-                WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
-                SetWallpaper(string.Empty);
+                lock (FileGate) { File.Delete(Path); PendingFiles.Remove(Path); }
             }
-            catch (Exception ex) { AppLog.Error("壁紙の消去", ex); }
+            catch (Exception ex) { AppLog.Error("一時壁紙の削除", ex); }
         }
-
-        private static void SetWallpaper(string path)
-        {
-            if (!SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE))
-                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "壁紙設定APIが失敗しました。");
-        }
-
-        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        private static extern bool SystemParametersInfo(uint uiAction, uint uiParam, string pvParam, uint fWinIni);
-
-        private const uint SPI_SETDESKWALLPAPER = 0x0014;
-        private const uint SPIF_UPDATEINIFILE = 0x01;
-        private const uint SPIF_SENDCHANGE = 0x02;
     }
+
+    internal void Attach(DispatcherForm form)
+    {
+        _worker = new LatestWorker<RenderRequest, RenderedWallpaper>(Build,
+            action => form.BeginInvoke(action), Publish);
+    }
+
+    public void Initialize(Config config)
+    {
+        // Caller never mutates a configuration after applying it.
+        _config = config;
+        Invalidate();
+    }
+
+    public void Invalidate()
+    {
+        _revision++;
+        _worker?.Invalidate();
+    }
+
+    public void UpdateWallpaper(bool replace = false)
+    {
+        var bounds = StableScreensProvider.Screens.Select(s => s.Bounds).ToArray();
+        _worker?.Request(new RenderRequest(_config, bounds, _revision), replace);
+    }
+
+    private RenderedWallpaper Build(RenderRequest request, CancellationToken token)
+    {
+        _queues.Cancellation = token;
+        if (_queueRevision != request.Revision)
+        {
+            _queues.SetConfig(request.Config);
+            _queues.ReplaceQueues(QueueManager.Prepare(request.Config, request.Bounds.Length, token));
+            _queueRevision = request.Revision;
+        }
+        return Render(request, _queues, token, Const.AppDataFolder);
+    }
+
+    internal static RenderedWallpaper Render(RenderRequest request, QueueManager queues,
+        CancellationToken token, string directory)
+    {
+        token.ThrowIfCancellationRequested();
+        if (request.Bounds.Length == 0) throw new InvalidOperationException("モニターがありません。");
+        var virtualBounds = request.Bounds.Aggregate(Rectangle.Union);
+        using var bitmap = new Bitmap(virtualBounds.Width, virtualBounds.Height);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.Clear(Color.Black);
+        var renderer = new WallpaperRenderer { Cancellation = token };
+        renderer.SetConfig(request.Config);
+        var history = new List<(int, string)>();
+        for (int i = 0; i < request.Bounds.Length; i++)
+        {
+            token.ThrowIfCancellationRequested();
+            var image = queues.GetNextImage(i);
+            renderer.ComposeMonitor(i, image, graphics, virtualBounds, request.Bounds,
+                queues.GetQueue(i), (monitor, path) => history.Add((monitor, path)));
+        }
+        token.ThrowIfCancellationRequested();
+        Directory.CreateDirectory(directory);
+        var output = new RenderedWallpaper(System.IO.Path.Combine(directory,
+            $"render-{Guid.NewGuid():N}.bmp"), history, request.Config.History.Limit);
+        try
+        {
+            using (var stream = output.CreateOutput()) bitmap.Save(stream, ImageFormat.Bmp);
+            token.ThrowIfCancellationRequested();
+            return output;
+        }
+        catch { output.Dispose(); throw; }
+    }
+
+    private static void Publish(RenderedWallpaper result)
+    {
+        try
+        {
+            File.Move(result.Path, Const.WallpaperPicturePath, true);
+            SetWallpaper(Const.WallpaperPicturePath);
+            foreach (var item in result.History)
+                HistoryManager.Instance.Push(item.Monitor, item.Path, result.HistoryLimit);
+        }
+        finally { WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath); }
+    }
+
+    public static void ClearWallpaper()
+    {
+        try
+        {
+            WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
+            SetWallpaper(string.Empty);
+        }
+        catch (Exception ex) { AppLog.Error("壁紙の消去", ex); }
+    }
+
+    public void Dispose() => _worker?.Dispose();
+
+    private static void SetWallpaper(string path)
+    {
+        if (!SystemParametersInfo(0x0014, 0, path, 0x01 | 0x02))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "壁紙設定APIが失敗しました。");
+    }
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, string path, uint flags);
 }
