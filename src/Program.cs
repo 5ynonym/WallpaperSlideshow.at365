@@ -12,7 +12,23 @@ public static class Program
         Application.SetCompatibleTextRenderingDefault(false);
 
         var dispatcherForm = DispatcherForm.Instance;
-        ApplicationController.Instance.Initialize(config, dispatcherForm);
-        Application.Run(dispatcherForm);
+        try
+        {
+            ApplicationController.Instance.Initialize(config, dispatcherForm);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"起動できません: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            ApplicationController.Instance.Dispose();
+            return;
+        }
+        try
+        {
+            Application.Run(dispatcherForm);
+        }
+        finally
+        {
+            ApplicationController.Instance.Dispose();
+        }
     }
 }

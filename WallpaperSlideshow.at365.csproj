@@ -24,6 +24,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="tests\**\*.cs" />
+    <InternalsVisibleTo Include="WallpaperSlideshow.RegressionTests" />
     <Content Include="icon.ico" />
     <EmbeddedResource Include="config.json" />
     <EmbeddedResource Include="paused.ico" />

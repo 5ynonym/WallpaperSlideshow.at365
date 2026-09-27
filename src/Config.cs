@@ -67,12 +67,53 @@ namespace at365.WallpaperSlideshow
                     ReadCommentHandling = JsonCommentHandling.Skip
                 };
                 options.Converters.Add(new JsonStringEnumConverter());
-                return JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath), options) ?? new Config();
+                var config = JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath), options)
+                    ?? throw new InvalidDataException("設定に null は指定できません。");
+                config.Validate();
+                return config;
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"設定ファイルの読み込みに失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
+            }
+        }
+
+        public void Validate(IEnumerable<Rectangle>? monitorBounds = null)
+        {
+            static void Range(int value, int minimum, int maximum, string name)
+            {
+                if (value < minimum || value > maximum)
+                    throw new InvalidDataException($"{name} は {minimum}～{maximum} で指定してください。");
+            }
+
+            Range(IntervalSeconds, 1, int.MaxValue / 1000, nameof(IntervalSeconds));
+            if (History == null || Monitors == null)
+                throw new InvalidDataException("History と Monitors に null は指定できません。");
+            Range(History.Limit, 0, 1000, "History.Limit");
+            Range(History.ThumbnailWidth, 1, 2048, "History.ThumbnailWidth");
+            Range(History.ThumbnailHeight, 1, 2048, "History.ThumbnailHeight");
+            Range(History.MaxFileNameLength, 1, 1024, "History.MaxFileNameLength");
+            if (!float.IsFinite(TileMargin) || TileMargin < 0 || TileMargin > 4096)
+                throw new InvalidDataException("TileMargin は 0～4096 で指定してください。");
+
+            var bounds = monitorBounds?.ToArray();
+            for (int i = 0; i < Monitors.Count; i++)
+            {
+                var monitor = Monitors[i];
+                if (monitor == null)
+                    throw new InvalidDataException($"Monitors[{i}] に null は指定できません。");
+                if (monitor.Mode is { } mode && !Enum.IsDefined(mode))
+                    throw new InvalidDataException($"Monitors[{i}].Mode が不正です。");
+                Range(monitor.TileCount, 1, 64, $"Monitors[{i}].TileCount");
+                Range(monitor.PaddingLeft, 0, 65535, $"Monitors[{i}].PaddingLeft");
+                Range(monitor.PaddingRight, 0, 65535, $"Monitors[{i}].PaddingRight");
+                Range(monitor.PaddingTop, 0, 65535, $"Monitors[{i}].PaddingTop");
+                Range(monitor.PaddingBottom, 0, 65535, $"Monitors[{i}].PaddingBottom");
+                if (bounds != null && i < bounds.Length &&
+                    (monitor.PaddingLeft + monitor.PaddingRight >= bounds[i].Width ||
+                     monitor.PaddingTop + monitor.PaddingBottom >= bounds[i].Height))
+                    throw new InvalidDataException($"Monitors[{i}] の余白で描画領域がなくなります。");
             }
         }
 

@@ -145,6 +145,7 @@ namespace at365.WallpaperSlideshow
             _disposed = true;
 
             try { if (_notifyIcon != null) _notifyIcon.Visible = false; } catch { }
+            try { _notifyIcon?.ContextMenuStrip?.Dispose(); } catch { }
             try { _notifyIcon?.Dispose(); } catch { }
             try { _iconRunning?.Dispose(); } catch { }
             try { _iconPaused?.Dispose(); } catch { }

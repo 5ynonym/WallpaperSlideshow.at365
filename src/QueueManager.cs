@@ -28,14 +28,21 @@ namespace at365.WallpaperSlideshow
             if (_config == null)
                 throw new InvalidOperationException("QueueManager.SetConfig() が呼ばれていません");
 
-            _queues.Clear();
-            _lastImages.Clear();
+            ReplaceQueues(Prepare(_config, screens.Length));
+        }
 
-            for (int i = 0; i < screens.Length; i++)
-            {
-                _queues.Add(BuildQueueForMonitor(i));
+        internal static List<Queue<string>> Prepare(Config config, int count)
+        {
+            return Enumerable.Range(0, count).Select(i => BuildQueueForMonitor(config, i)).ToList();
+        }
+
+        internal void ReplaceQueues(List<Queue<string>> queues)
+        {
+            _queues.Clear();
+            _queues.AddRange(queues);
+            _lastImages.Clear();
+            for (int i = 0; i < queues.Count; i++)
                 _lastImages.Add(null);
-            }
         }
 
         public Queue<string> GetQueue(int monitorIndex)
@@ -81,8 +88,13 @@ namespace at365.WallpaperSlideshow
             if (_config == null)
                 throw new InvalidOperationException("QueueManager.SetConfig() が呼ばれていません");
 
-            string? folder = (index < _config.Monitors.Count)
-                ? _config.Monitors[index].Folder
+            return BuildQueueForMonitor(_config, index);
+        }
+
+        private static Queue<string> BuildQueueForMonitor(Config config, int index)
+        {
+            string? folder = (index < config.Monitors.Count)
+                ? config.Monitors[index].Folder
                 : null;
 
             List<string> files = new();
@@ -101,13 +113,13 @@ namespace at365.WallpaperSlideshow
             return new Queue<string>(Shuffle(files));
         }
 
-        private bool IsImageExt(string path)
+        private static bool IsImageExt(string path)
         {
             string ext = Path.GetExtension(path).ToLowerInvariant();
             return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp";
         }
 
-        private List<string> Shuffle(List<string> list)
+        private static List<string> Shuffle(List<string> list)
         {
             return list.OrderBy(_ => Random.Shared.Next()).ToList();
         }

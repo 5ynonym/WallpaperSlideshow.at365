@@ -10,7 +10,7 @@ namespace at365.WallpaperSlideshow
 
         public static WallpaperController Instance => _lazy.Value;
 
-        private Config? _config;
+        private Config _config = new();
 
         private WallpaperController() { }
 

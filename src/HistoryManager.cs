@@ -15,6 +15,8 @@ namespace at365.WallpaperSlideshow
         public void SetConfig(Config config)
         {
             _config = config;
+            foreach (var list in _history)
+                while (list.Count > config.History.Limit) list.RemoveLast();
         }
 
         public void EnsureInitialized(Screen[] screens)
@@ -49,24 +51,32 @@ namespace at365.WallpaperSlideshow
             var list = _history[monitor];
             list.AddFirst(path);
 
-            if (list.Count > limit)
+            while (list.Count > limit)
                 list.RemoveLast();
         }
 
         public ToolStripMenuItem CreateHistoryMenu()
         {
             var root = new ToolStripMenuItem("最近使った壁紙(&R)");
+            var rootItems = root.DropDownItems;
+            var cache = new Dictionary<string, (Image? img, string? size, string? res)>();
+            void ClearHistoryMenu()
+            {
+                DisposeItems(rootItems);
+                foreach (var info in cache.Values) info.img?.Dispose();
+                cache.Clear();
+            }
+            root.DropDownClosed += (_, _) => ClearHistoryMenu();
+            root.Disposed += (_, _) => ClearHistoryMenu();
 
             root.DropDownOpening += (_, _) =>
             {
-                root.DropDownItems.Clear();
+                ClearHistoryMenu();
 
                 var screens = StableScreensProvider.Screens;
                 EnsureInitialized(screens);
 
-                var cache = new Dictionary<string, (Image? img, string? size, string? res)>();
-
-                for (int i = 0; i < _history.Length; i++)
+                for (int i = 0; i < screens.Length; i++)
                 {
                     int monitorIndex = i;
                     var monItem = new ToolStripMenuItem($"{monitorIndex + 1}: ");
@@ -74,7 +84,7 @@ namespace at365.WallpaperSlideshow
 
                     monItem.DropDownOpening += (_, _) =>
                     {
-                        monItem.DropDownItems.Clear();
+                        DisposeItems(monItem.DropDownItems);
 
                         var list = _history[monitorIndex];
                         if (list.Count == 0)
@@ -153,6 +163,11 @@ namespace at365.WallpaperSlideshow
             parent.DropDownDirection = ToolStripDropDownDirection.Left;
 
             var tt = new ToolTip();
+            panel.Disposed += (_, _) =>
+            {
+                pb.Image = null; // Images belong to the menu cache, not the PictureBox.
+                tt.Dispose();
+            };
             tt.SetToolTip(pb, path);
             tt.SetToolTip(labelSize, path);
             tt.SetToolTip(labelRes, path);
@@ -174,19 +189,15 @@ namespace at365.WallpaperSlideshow
                     string sizeText = "";
                     string resText = "";
 
-                    try { img = LoadImageWithoutLock(path); } catch { }
+                    img = ImageLoader.Load(path, new Size(thumbWidth, thumbHeight), out var originalSize);
                     try
                     {
                         var fi = new FileInfo(path);
                         sizeText = $"{fi.Length / 1024f / 1024f:0.00} MB";
                     }
                     catch { }
-                    try
-                    {
-                        using var tmp = LoadImageWithoutLock(path);
-                        resText = $"{tmp.Width}×{tmp.Height}";
-                    }
-                    catch { }
+                    if (!originalSize.IsEmpty)
+                        resText = $"{originalSize.Width}×{originalSize.Height}";
 
                     info = (img, sizeText, resText);
                     cache[path] = info;
@@ -251,13 +262,15 @@ namespace at365.WallpaperSlideshow
             }
         }
 
-        private static Image LoadImageWithoutLock(string path)
+        private static void DisposeItems(ToolStripItemCollection items)
         {
-            using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var ms = new MemoryStream();
-            fs.CopyTo(ms);
-            ms.Position = 0;
-            return Image.FromStream(ms);
+            foreach (var item in items.Cast<ToolStripItem>().ToArray())
+            {
+                if (item is ToolStripDropDownItem dropdown)
+                    DisposeItems(dropdown.DropDownItems);
+                items.Remove(item);
+                item.Dispose();
+            }
         }
 
         private static string Truncate(string text, int max)

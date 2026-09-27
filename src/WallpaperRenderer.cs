@@ -23,17 +23,7 @@ namespace at365.WallpaperSlideshow
         /// </summary>
         public static Image? LoadImageWithoutLock(string path)
         {
-            if (!File.Exists(path)) return null;
-
-            try
-            {
-                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                return Image.FromStream(fs);
-            }
-            catch
-            {
-                return null;
-            }
+            return ImageLoader.Load(path);
         }
 
         /// <summary>
@@ -55,17 +45,23 @@ namespace at365.WallpaperSlideshow
             var bounds = screen.Bounds;
 
             var drawRect = CalculateDrawRectangle(bounds, virtualBounds, monitorConfig);
+            if (drawRect.Width <= 0 || drawRect.Height <= 0) return;
 
             if (monitorImage != null && !File.Exists(monitorImage)) return;
 
-            var mode = monitorConfig.Mode ?? StretchMode.Fit;
-            if (mode == StretchMode.Tile)
+            var state = gMain.Save();
+            try
             {
-                HandleTileMode(monitorIndex, monitorImage, gMain, drawRect, queue, monitorConfig, pushHistory);
+                gMain.SetClip(drawRect, System.Drawing.Drawing2D.CombineMode.Intersect);
+                var mode = monitorConfig.Mode ?? StretchMode.Fit;
+                if (mode == StretchMode.Tile)
+                    HandleTileMode(monitorIndex, monitorImage, gMain, drawRect, queue, monitorConfig, pushHistory);
+                else
+                    HandleSingleImageMode(monitorIndex, monitorImage, gMain, drawRect, mode, pushHistory);
             }
-            else
+            finally
             {
-                HandleSingleImageMode(monitorIndex, monitorImage, gMain, drawRect, mode, pushHistory);
+                gMain.Restore(state);
             }
         }
 
@@ -137,16 +133,24 @@ namespace at365.WallpaperSlideshow
         private static List<Image> LoadImages(List<string> paths, int monitorIndex, Action<int, string> pushHistory)
         {
             var images = new List<Image>();
-            foreach (var path in paths)
+            try
             {
-                var image = LoadImageWithoutLock(path);
-                if (image != null)
+                foreach (var path in paths)
                 {
-                    images.Add(image);
-                    pushHistory(monitorIndex, path);
+                    var image = LoadImageWithoutLock(path);
+                    if (image != null)
+                    {
+                        images.Add(image);
+                        pushHistory(monitorIndex, path);
+                    }
                 }
+                return images;
             }
-            return images;
+            catch
+            {
+                foreach (var image in images) image.Dispose();
+                throw;
+            }
         }
 
         private void HandleSingleImageMode(
@@ -171,20 +175,30 @@ namespace at365.WallpaperSlideshow
         /// </summary>
         public void DrawImageWithMode(Graphics g, Image img, Rectangle drawRect, StretchMode mode)
         {
-            switch (mode)
+            if (drawRect.Width <= 0 || drawRect.Height <= 0) return;
+            var state = g.Save();
+            try
             {
-                case StretchMode.Fill:
-                    DrawScaledImage(g, img, drawRect, Math.Max);
-                    break;
-                case StretchMode.Fit:
-                    DrawScaledImage(g, img, drawRect, Math.Min);
-                    break;
-                case StretchMode.Stretch:
-                    g.DrawImage(img, drawRect);
-                    break;
-                case StretchMode.Center:
-                    DrawCenteredImage(g, img, drawRect);
-                    break;
+                g.SetClip(drawRect, System.Drawing.Drawing2D.CombineMode.Intersect);
+                switch (mode)
+                {
+                    case StretchMode.Fill:
+                        DrawScaledImage(g, img, drawRect, Math.Max);
+                        break;
+                    case StretchMode.Fit:
+                        DrawScaledImage(g, img, drawRect, Math.Min);
+                        break;
+                    case StretchMode.Stretch:
+                        g.DrawImage(img, drawRect);
+                        break;
+                    case StretchMode.Center:
+                        DrawCenteredImage(g, img, drawRect);
+                        break;
+                }
+            }
+            finally
+            {
+                g.Restore(state);
             }
         }
 

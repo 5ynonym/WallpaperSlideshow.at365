@@ -19,6 +19,7 @@ namespace at365.WallpaperSlideshow
 
         private bool _requiredInitialize = false;
         private bool _paused = false;
+        private readonly PauseState _pauseState = new();
         private bool _disposed;
 
         private ApplicationController() { }
@@ -26,15 +27,17 @@ namespace at365.WallpaperSlideshow
         public void Initialize(Config config, DispatcherForm dispatcherForm)
         {
             EnsureSingleInstance();
-            SetWallpaperSpanMode();
-
+            _pauseState.Remote = SystemInformation.TerminalServerSession;
+            _paused = _pauseState.IsPaused;
             ApplyConfig(config);
+            SetWallpaperSpanMode();
             InitializeApplication();
 
-            SystemEvents.DisplaySettingsChanged += (_, _) => InitializeApplication();
+            _ = dispatcherForm.Handle;
+            SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
-            dispatcherForm.OnRdpConnect = () => TogglePause(true);
-            dispatcherForm.OnRdpDisconnect = () => TogglePause(true);
+            dispatcherForm.OnRdpConnect = () => SetRemotePause(true);
+            dispatcherForm.OnRdpDisconnect = () => SetRemotePause(true);
 
             TrayIconManager.Instance.Initialize(
                 config,
@@ -50,6 +53,7 @@ namespace at365.WallpaperSlideshow
                 _uiTimer = new System.Windows.Forms.Timer();
                 _uiTimer.Tick += (_, _) =>
                 {
+                    if (_pauseState.IsPaused) return;
                     if (_requiredInitialize)
                     {
                         _requiredInitialize = false;
@@ -63,30 +67,32 @@ namespace at365.WallpaperSlideshow
             }
 
             _uiTimer.Interval = config.IntervalSeconds * 1000;
-            _uiTimer.Start();
+            if (!_paused) _uiTimer.Start();
+            else WallpaperController.ClearWallpaper();
+            TrayIconManager.Instance.UpdateIcon(_paused);
 
             SetupConfigWatcher();
         }
 
         private void ApplyConfig(Config config)
         {
+            var screens = StableScreensProvider.Screens;
+            config.Validate(screens.Select(s => s.Bounds));
+            // Prepare fallible work before replacing any active configuration.
+            var queues = QueueManager.Prepare(config, screens.Length);
+            var watcher = new FolderWatcher(config.Monitors.Select(m => m.Folder),
+                () => _requiredInitialize = true);
+
             WallpaperRenderer.Instance.SetConfig(config);
             WallpaperController.Instance.Initialize(config);
             QueueManager.Instance.SetConfig(config);
-            QueueManager.Instance.Initialize(StableScreensProvider.Screens);
+            QueueManager.Instance.ReplaceQueues(queues);
             HistoryManager.Instance.SetConfig(config);
-            HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
-            RebuildFolderWatcher(config);
-        }
-
-        private void RebuildFolderWatcher(Config config)
-        {
-            try { _folderWatcher?.Dispose(); } catch { }
-
-            _folderWatcher = new FolderWatcher(
-                config.Monitors.Select(m => m.Folder),
-                () => _requiredInitialize = true
-            );
+            HistoryManager.Instance.EnsureInitialized(screens);
+            var previousWatcher = _folderWatcher;
+            _folderWatcher = watcher;
+            previousWatcher?.Dispose();
+            if (_uiTimer != null) _uiTimer.Interval = checked(config.IntervalSeconds * 1000);
         }
 
         private void InitializeApplication(bool forceInitialize = false)
@@ -98,7 +104,8 @@ namespace at365.WallpaperSlideshow
             StableScreensProvider.Refresh();
             QueueManager.Instance.Initialize(StableScreensProvider.Screens);
             HistoryManager.Instance.EnsureInitialized(StableScreensProvider.Screens);
-            WallpaperController.Instance.UpdateWallpaper();
+            if (!_pauseState.IsPaused)
+                WallpaperController.Instance.UpdateWallpaper();
         }
 
         private void SetupConfigWatcher()
@@ -118,7 +125,7 @@ namespace at365.WallpaperSlideshow
                 _configDebounce?.Dispose();
                 _configDebounce = new System.Threading.Timer(_ =>
                 {
-                    DispatcherForm.Instance.BeginInvoke(() => ReloadConfig());
+                    OnUiThread(ReloadConfig);
                 }, null, 500, Timeout.Infinite);
             };
 
@@ -132,25 +139,41 @@ namespace at365.WallpaperSlideshow
                 var newConfig = Config.LoadConfig();
                 if (newConfig == null) return;
 
-                _requiredInitialize = true;
                 ApplyConfig(newConfig);
+                _requiredInitialize = true;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"設定を適用できません。以前の設定を維持します: {ex.Message}",
+                    "設定エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         public void TogglePause(bool? forceState = null)
         {
-            bool target = forceState ?? !_paused;
+            _pauseState.Manual = forceState ?? !_pauseState.Manual;
+            ApplyPauseState();
+        }
+
+        private void SetRemotePause(bool paused)
+        {
+            _pauseState.Remote = paused;
+            ApplyPauseState();
+        }
+
+        private void ApplyPauseState()
+        {
+            bool target = _pauseState.IsPaused;
+            if (target == _paused) return;
+            _paused = target;
             if (!target)
             {
                 InitializeApplication(true);
-                _uiTimer!.Start();
-                _paused = false;
+                _uiTimer?.Start();
             }
             else
             {
-                _uiTimer!.Stop();
-                _paused = true;
+                _uiTimer?.Stop();
                 WallpaperController.ClearWallpaper();
             }
 
@@ -159,16 +182,47 @@ namespace at365.WallpaperSlideshow
 
         private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
         {
-            switch (e.Reason)
+            OnUiThread(() =>
             {
-                case SessionSwitchReason.SessionLock:
-                    TogglePause(true);
-                    break;
+                switch (e.Reason)
+                {
+                    case SessionSwitchReason.SessionLock:
+                        _pauseState.SessionLocked = true;
+                        break;
+                    case SessionSwitchReason.SessionUnlock:
+                        _pauseState.SessionLocked = false;
+                        break;
+                    case SessionSwitchReason.RemoteConnect:
+                    case SessionSwitchReason.RemoteDisconnect:
+                        _pauseState.Remote = true;
+                        break;
+                    case SessionSwitchReason.ConsoleConnect:
+                        _pauseState.Remote = false;
+                        break;
+                }
+                ApplyPauseState();
+            });
+        }
 
-                case SessionSwitchReason.SessionUnlock:
-                    TogglePause(false);
-                    break;
+        private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+            => OnUiThread(() => InitializeApplication());
+
+        private void OnUiThread(Action action)
+        {
+            var form = DispatcherForm.Instance;
+            if (_disposed || form.IsDisposed || !form.IsHandleCreated) return;
+            if (form.InvokeRequired)
+            {
+                try
+                {
+                    form.BeginInvoke(() =>
+                    {
+                        if (!_disposed && !form.IsDisposed) action();
+                    });
+                }
+                catch (InvalidOperationException) when (_disposed || form.IsDisposed || !form.IsHandleCreated) { }
             }
+            else action();
         }
 
         private bool HasMonitorConfigChanged()
@@ -233,6 +287,10 @@ namespace at365.WallpaperSlideshow
             if (_disposed) return;
             _disposed = true;
 
+            SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
+            try { _configWatcher?.Dispose(); } catch { }
+            try { _configDebounce?.Dispose(); } catch { }
             try { _uiTimer?.Dispose(); } catch { }
             try { _folderWatcher?.Dispose(); } catch { }
             try { TrayIconManager.Instance.Dispose(); } catch { }

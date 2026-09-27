@@ -1,4 +1,4 @@
-﻿namespace at365.WallpaperSlideshow
+namespace at365.WallpaperSlideshow
 {
     public class FolderWatcher : IDisposable
     {
@@ -12,29 +12,37 @@
         {
             _onChanged = onChanged;
 
-            foreach (var folder in folders)
+            try
             {
-                if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
-                    continue;
-
-                var watcher = new FileSystemWatcher(folder)
+                foreach (var folder in folders.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
-                    IncludeSubdirectories = true,
-                    NotifyFilter =
-                        NotifyFilters.FileName |
-                        NotifyFilters.DirectoryName |
-                        NotifyFilters.LastWrite |
-                        NotifyFilters.Size
-                };
+                    if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+                        continue;
 
-                watcher.Changed += OnFsEvent;
-                watcher.Created += OnFsEvent;
-                watcher.Deleted += OnFsEvent;
-                watcher.Renamed += OnFsEvent;
-                watcher.Error += (_, __) => { };
+                    var watcher = new FileSystemWatcher(folder)
+                    {
+                        IncludeSubdirectories = true,
+                        NotifyFilter =
+                            NotifyFilters.FileName |
+                            NotifyFilters.DirectoryName |
+                            NotifyFilters.LastWrite |
+                            NotifyFilters.Size
+                    };
 
-                watcher.EnableRaisingEvents = true;
-                _watchers.Add(watcher);
+                    watcher.Changed += OnFsEvent;
+                    watcher.Created += OnFsEvent;
+                    watcher.Deleted += OnFsEvent;
+                    watcher.Renamed += OnFsEvent;
+                    watcher.Error += (_, __) => { };
+
+                    _watchers.Add(watcher);
+                    watcher.EnableRaisingEvents = true;
+                }
+            }
+            catch
+            {
+                Dispose();
+                throw;
             }
         }
 
