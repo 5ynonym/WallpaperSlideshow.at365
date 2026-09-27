@@ -1,29 +1,6 @@
 {
   "IntervalSeconds": 10,
-  "Monitors": [
-    {
-      "Folder": "C:/Wallpapers/16-9",
-      "Mode": "Tile",
-      "TileCount": 4,
-      "PaddingLeft": 0,
-      "PaddingRight": 0,
-      "PaddingTop": 0,
-      "PaddingBottom": 40
-    },
-    {
-      "Folder": "C:/Wallpapers/Monitor2",
-      "Mode": "Fit"
-    },
-    {
-      "Folder": "C:/Wallpapers/Monitor3",
-      "Mode": "Tile",
-      "TileCount": 13
-    },
-    {
-      "Folder": "C:/Wallpapers/Monitor4",
-      "Mode": "Center"
-    }
-  ],
+  "Monitors": [],
   "History": {
     "Limit": 30,
     "ThumbnailWidth": 480,

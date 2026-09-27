@@ -48,10 +48,13 @@ namespace at365.WallpaperSlideshow
             var configPath = Const.ConfigPath;
             if (!File.Exists(configPath))
             {
-                configPath = Const.ConfigFileName; // カレントディレクトリ
-                if (!File.Exists(configPath))
+                try
                 {
-                    MessageBox.Show($"設定ファイルが見つかりません: {configPath}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    File.WriteAllText(configPath, LoadDefaultConfig());
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"設定ファイルの作成に失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return null;
                 }
             }
@@ -71,6 +74,18 @@ namespace at365.WallpaperSlideshow
                 MessageBox.Show($"設定ファイルの読み込みに失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
+        }
+
+        private static string LoadDefaultConfig()
+        {
+            var assembly = typeof(Config).Assembly;
+            var resourceName = $"{typeof(Config).Namespace}.{Const.ConfigFileName}";
+
+            using var stream = assembly.GetManifestResourceStream(resourceName)
+                ?? throw new InvalidOperationException($"埋め込み設定ファイルが見つかりません: {resourceName}");
+            using var reader = new StreamReader(stream);
+
+            return reader.ReadToEnd();
         }
     }
 }

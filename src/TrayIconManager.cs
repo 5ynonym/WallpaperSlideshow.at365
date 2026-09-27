@@ -39,8 +39,8 @@ namespace at365.WallpaperSlideshow
             _createHistoryMenu = createHistoryMenu;
             _shutdown = shutdown;
 
-            _iconRunning = new Icon("running.ico");
-            _iconPaused = new Icon("paused.ico");
+            _iconRunning = LoadIconResource("running.ico");
+            _iconPaused = LoadIconResource("paused.ico");
 
             _notifyIcon = new NotifyIcon
             {
@@ -52,6 +52,18 @@ namespace at365.WallpaperSlideshow
             _notifyIcon.MouseClick += OnMouseClick;
 
             BuildContextMenu();
+        }
+
+        private static Icon LoadIconResource(string fileName)
+        {
+            var assembly = typeof(TrayIconManager).Assembly;
+            var resourceName = $"{typeof(TrayIconManager).Namespace}.{fileName}";
+
+            using var stream = assembly.GetManifestResourceStream(resourceName)
+                ?? throw new InvalidOperationException($"埋め込みアイコンが見つかりません: {resourceName}");
+            using var icon = new Icon(stream);
+
+            return (Icon)icon.Clone();
         }
 
         public void SetConfig(Config config)
