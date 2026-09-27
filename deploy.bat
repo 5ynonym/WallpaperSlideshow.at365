@@ -1,12 +1,19 @@
 @echo off
-setlocal
+setlocal DisableDelayedExpansion
 
 set "SOURCE=%~dp0publish\WallpaperSlideshow.at365.exe"
-if "%~1"=="" (
-    echo Usage: deploy.bat "destination-directory"
+set "TARGET_DIR="
+if not "%~1"=="" (
+    set "TARGET_DIR=%~f1"
+    goto target_ready
+)
+if exist "%~dp0deploy.local.txt" set /p "TARGET_DIR="<"%~dp0deploy.local.txt"
+if not defined TARGET_DIR (
+    echo Specify a destination argument or put its absolute path in deploy.local.txt.
     exit /b 1
 )
-set "TARGET_DIR=%~f1"
+
+:target_ready
 set "TARGET=%TARGET_DIR%\WallpaperSlideshow.at365.exe"
 
 if not exist "%SOURCE%" (

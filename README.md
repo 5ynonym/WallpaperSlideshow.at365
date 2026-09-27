@@ -107,6 +107,8 @@ dotnet run --project tests/WallpaperSlideshow.RegressionTests.csproj -c Release
 .\deploy.bat "C:\Tools\WallpaperSlideshow"
 ```
 
+引数なしで使う場合は、`deploy.local.txt.example` を `deploy.local.txt` にコピーし、1行目に配置先の絶対パスを引用符なしで記入します。このファイルはGit管理から除外されます。以後は `.\deploy.bat` だけで配置できます。引数を指定した場合は引数が優先されます。
+
 配置先フォルダは事前に作成してください。スクリプトはEXEを上書きし、実行中アプリの強制終了や自動起動は行いません。ユーザー設定はAppDataに保持されます。`publish.bat`へ追加のdotnetオプションを渡せますが、出力先や単一ファイル設定を変更した場合は配布方法も合わせて調整してください。
 
 GitHub ActionsにWindowsでのビルド・回帰テスト・発行EXEの保存を設定しています。テストの範囲と実機確認項目は[tests/README.md](tests/README.md)を参照してください。
