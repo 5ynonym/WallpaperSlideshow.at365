@@ -18,6 +18,7 @@ public static class Program
         }
         catch (Exception ex)
         {
+            AppLog.Error("起動", ex);
             MessageBox.Show($"起動できません: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
             ApplicationController.Instance.Dispose();
             return;

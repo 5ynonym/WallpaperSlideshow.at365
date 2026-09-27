@@ -42,6 +42,7 @@ internal static class ImageLoader
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
             or ArgumentException or OutOfMemoryException or System.Runtime.InteropServices.ExternalException)
         {
+            AppLog.Error("画像読み込み: " + path, ex);
             return null;
         }
     }

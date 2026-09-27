@@ -11,21 +11,25 @@ namespace at365.WallpaperSlideshow
         public static ApplicationController Instance => _lazy.Value;
         private static readonly Lazy<ApplicationController> _lazy = new(() => new ApplicationController());
 
-        private FileSystemWatcher? _configWatcher;
-        private System.Threading.Timer? _configDebounce;
+        private ConfigReloader? _configReloader;
+        private System.Windows.Forms.Timer? _maintenanceTimer;
+        private int _maintenanceTicks;
         private FolderWatcher? _folderWatcher;
         private System.Windows.Forms.Timer? _uiTimer;
         private Rectangle[]? _lastMonitorBounds;
 
-        private bool _requiredInitialize = false;
+        private int _requiredInitialize;
         private bool _paused = false;
         private readonly PauseState _pauseState = new();
         private bool _disposed;
+        private bool _shutdown;
+        private DispatcherForm? _dispatcher;
 
         private ApplicationController() { }
 
         public void Initialize(Config config, DispatcherForm dispatcherForm)
         {
+            _dispatcher = dispatcherForm;
             EnsureSingleInstance();
             _pauseState.Remote = SystemInformation.TerminalServerSession;
             _paused = _pauseState.IsPaused;
@@ -54,9 +58,8 @@ namespace at365.WallpaperSlideshow
                 _uiTimer.Tick += (_, _) =>
                 {
                     if (_pauseState.IsPaused) return;
-                    if (_requiredInitialize)
+                    if (Interlocked.Exchange(ref _requiredInitialize, 0) != 0)
                     {
-                        _requiredInitialize = false;
                         InitializeApplication(true);
                     }
                     else
@@ -71,7 +74,23 @@ namespace at365.WallpaperSlideshow
             else WallpaperController.ClearWallpaper();
             TrayIconManager.Instance.UpdateIcon(_paused);
 
-            SetupConfigWatcher();
+            _configReloader = new ConfigReloader(Const.ConfigPath, newConfig =>
+            {
+                ApplyConfig(newConfig);
+                Interlocked.Exchange(ref _requiredInitialize, 1);
+            });
+            _maintenanceTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            _maintenanceTimer.Tick += (_, _) =>
+            {
+                if (_disposed) return;
+                _configReloader.Poll();
+                if (++_maintenanceTicks >= 5)
+                {
+                    _maintenanceTicks = 0;
+                    _folderWatcher?.Refresh();
+                }
+            };
+            _maintenanceTimer.Start();
         }
 
         private void ApplyConfig(Config config)
@@ -81,7 +100,7 @@ namespace at365.WallpaperSlideshow
             // Prepare fallible work before replacing any active configuration.
             var queues = QueueManager.Prepare(config, screens.Length);
             var watcher = new FolderWatcher(config.Monitors.Select(m => m.Folder),
-                () => _requiredInitialize = true);
+                () => Interlocked.Exchange(ref _requiredInitialize, 1));
 
             WallpaperRenderer.Instance.SetConfig(config);
             WallpaperController.Instance.Initialize(config);
@@ -108,49 +127,9 @@ namespace at365.WallpaperSlideshow
                 WallpaperController.Instance.UpdateWallpaper();
         }
 
-        private void SetupConfigWatcher()
-        {
-            string configPath = Const.ConfigPath;
-            string dir = Path.GetDirectoryName(configPath)!;
-            string file = Path.GetFileName(configPath);
-
-            _configWatcher = new FileSystemWatcher(dir)
-            {
-                Filter = file,
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size
-            };
-
-            _configWatcher.Changed += (_, __) =>
-            {
-                _configDebounce?.Dispose();
-                _configDebounce = new System.Threading.Timer(_ =>
-                {
-                    OnUiThread(ReloadConfig);
-                }, null, 500, Timeout.Infinite);
-            };
-
-            _configWatcher.EnableRaisingEvents = true;
-        }
-
-        private void ReloadConfig()
-        {
-            try
-            {
-                var newConfig = Config.LoadConfig();
-                if (newConfig == null) return;
-
-                ApplyConfig(newConfig);
-                _requiredInitialize = true;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"設定を適用できません。以前の設定を維持します: {ex.Message}",
-                    "設定エラー", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-        }
-
         public void TogglePause(bool? forceState = null)
         {
+            if (_disposed) return;
             _pauseState.Manual = forceState ?? !_pauseState.Manual;
             ApplyPauseState();
         }
@@ -209,8 +188,8 @@ namespace at365.WallpaperSlideshow
 
         private void OnUiThread(Action action)
         {
-            var form = DispatcherForm.Instance;
-            if (_disposed || form.IsDisposed || !form.IsHandleCreated) return;
+            var form = _dispatcher;
+            if (_disposed || form == null || form.IsDisposed || !form.IsHandleCreated) return;
             if (form.InvokeRequired)
             {
                 try
@@ -278,8 +257,16 @@ namespace at365.WallpaperSlideshow
 
         public static void ApplicationShutdown()
         {
-      WallpaperController.ClearWallpaper();
+            Instance.PrepareShutdown();
             Application.Exit();
+        }
+
+        internal void PrepareShutdown()
+        {
+            if (_shutdown) return;
+            _shutdown = true;
+            Dispose();
+            WallpaperController.ClearWallpaper();
         }
 
         public void Dispose()
@@ -289,11 +276,15 @@ namespace at365.WallpaperSlideshow
 
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
-            try { _configWatcher?.Dispose(); } catch { }
-            try { _configDebounce?.Dispose(); } catch { }
-            try { _uiTimer?.Dispose(); } catch { }
-            try { _folderWatcher?.Dispose(); } catch { }
-            try { TrayIconManager.Instance.Dispose(); } catch { }
+            if (_dispatcher != null)
+            {
+                _dispatcher.OnRdpConnect = null;
+                _dispatcher.OnRdpDisconnect = null;
+            }
+            try { _maintenanceTimer?.Dispose(); } catch (Exception ex) { AppLog.Error("設定監視の終了", ex); }
+            try { _uiTimer?.Dispose(); } catch (Exception ex) { AppLog.Error("更新タイマーの終了", ex); }
+            try { _folderWatcher?.Dispose(); } catch (Exception ex) { AppLog.Error("フォルダ監視の終了", ex); }
+            try { TrayIconManager.Instance.Dispose(); } catch (Exception ex) { AppLog.Error("トレイの終了", ex); }
         }
     }
 }

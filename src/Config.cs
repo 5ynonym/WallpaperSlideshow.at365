@@ -40,43 +40,34 @@ namespace at365.WallpaperSlideshow
 
         public static Config? LoadConfig()
         {
-            if (!Directory.Exists(Const.AppDataFolder))
-            {
-                Directory.CreateDirectory(Const.AppDataFolder);
-            }
-
-            var configPath = Const.ConfigPath;
-            if (!File.Exists(configPath))
-            {
-                try
-                {
-                    File.WriteAllText(configPath, LoadDefaultConfig());
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"設定ファイルの作成に失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return null;
-                }
-            }
-
             try
             {
-                var options = new JsonSerializerOptions
-                {
-                    AllowTrailingCommas = true,
-                    ReadCommentHandling = JsonCommentHandling.Skip
-                };
-                options.Converters.Add(new JsonStringEnumConverter());
-                var config = JsonSerializer.Deserialize<Config>(File.ReadAllText(configPath), options)
-                    ?? throw new InvalidDataException("設定に null は指定できません。");
-                config.Validate();
-                return config;
+                Directory.CreateDirectory(Const.AppDataFolder);
+                var configPath = Const.ConfigPath;
+                if (!File.Exists(configPath))
+                    File.WriteAllText(configPath, LoadDefaultConfig());
+                return Parse(File.ReadAllText(configPath));
             }
             catch (Exception ex)
             {
+                AppLog.Error("設定の初期読み込み", ex);
                 MessageBox.Show($"設定ファイルの読み込みに失敗しました: {ex.Message}", "エラー", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return null;
             }
+        }
+
+        internal static Config Parse(string text)
+        {
+            var options = new JsonSerializerOptions
+            {
+                AllowTrailingCommas = true,
+                ReadCommentHandling = JsonCommentHandling.Skip
+            };
+            options.Converters.Add(new JsonStringEnumConverter());
+            var config = JsonSerializer.Deserialize<Config>(text, options)
+                ?? throw new InvalidDataException("設定に null は指定できません。");
+            config.Validate();
+            return config;
         }
 
         public void Validate(IEnumerable<Rectangle>? monitorBounds = null)

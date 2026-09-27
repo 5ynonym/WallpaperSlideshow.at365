@@ -1,76 +1,96 @@
-namespace at365.WallpaperSlideshow
+namespace at365.WallpaperSlideshow;
+
+public sealed class FolderWatcher : IDisposable
 {
-    public class FolderWatcher : IDisposable
+    private readonly Dictionary<string, FileSystemWatcher?> _watchers;
+    private readonly HashSet<string> _failed = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Action _onChanged;
+    private readonly object _gate = new();
+    private bool _disposed;
+
+    public FolderWatcher(IEnumerable<string?> folders, Action onChanged)
     {
-        private readonly List<FileSystemWatcher> _watchers = new();
-        private readonly Action _onChanged;
+        _onChanged = onChanged;
+        _watchers = folders.Where(f => !string.IsNullOrWhiteSpace(f))
+            .Select(f => f!).Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(f => f, _ => (FileSystemWatcher?)null, StringComparer.OrdinalIgnoreCase);
+        Refresh();
+    }
 
-        private readonly object _lock = new();
-        private bool _disposed = false;
-
-        public FolderWatcher(IEnumerable<string?> folders, Action onChanged)
-        {
-            _onChanged = onChanged;
-
-            try
-            {
-                foreach (var folder in folders.Distinct(StringComparer.OrdinalIgnoreCase))
-                {
-                    if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
-                        continue;
-
-                    var watcher = new FileSystemWatcher(folder)
-                    {
-                        IncludeSubdirectories = true,
-                        NotifyFilter =
-                            NotifyFilters.FileName |
-                            NotifyFilters.DirectoryName |
-                            NotifyFilters.LastWrite |
-                            NotifyFilters.Size
-                    };
-
-                    watcher.Changed += OnFsEvent;
-                    watcher.Created += OnFsEvent;
-                    watcher.Deleted += OnFsEvent;
-                    watcher.Renamed += OnFsEvent;
-                    watcher.Error += (_, __) => { };
-
-                    _watchers.Add(watcher);
-                    watcher.EnableRaisingEvents = true;
-                }
-            }
-            catch
-            {
-                Dispose();
-                throw;
-            }
-        }
-
-        private void OnFsEvent(object sender, FileSystemEventArgs e)
+    public void Refresh()
+    {
+        lock (_gate)
         {
             if (_disposed) return;
-
-            try
+            foreach (var folder in _watchers.Keys.ToArray())
             {
-                lock (_lock)
+                var watcher = _watchers[folder];
+                if (watcher != null && !_failed.Contains(folder) && Directory.Exists(folder)) continue;
+                watcher?.Dispose();
+                _watchers[folder] = null;
+                _failed.Remove(folder);
+                if (watcher != null) _onChanged();
+                if (!Directory.Exists(folder))
                 {
-                    if (_disposed) return;
-
+                    AppLog.Error("フォルダ監視の再接続待ち: " + folder,
+                        new DirectoryNotFoundException("監視対象フォルダにアクセスできません。"));
+                    continue;
+                }
+                try
+                {
+                    watcher = new FileSystemWatcher(folder)
+                    {
+                        IncludeSubdirectories = true,
+                        NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName |
+                            NotifyFilters.LastWrite | NotifyFilters.Size
+                    };
+                    watcher.Changed += OnChanged;
+                    watcher.Created += OnChanged;
+                    watcher.Deleted += OnChanged;
+                    watcher.Renamed += OnChanged;
+                    watcher.Error += (_, e) => MarkFailed(folder, e.GetException());
+                    _watchers[folder] = watcher;
+                    watcher.EnableRaisingEvents = true;
                     _onChanged();
                 }
+                catch (Exception ex)
+                {
+                    watcher?.Dispose();
+                    _watchers[folder] = null;
+                    AppLog.Error("フォルダ監視: " + folder, ex);
+                }
             }
-            catch { }
         }
+    }
 
-        public void Dispose()
+    internal void MarkFailed(string folder, Exception error)
+    {
+        lock (_gate)
         {
-            _disposed = true;
+            if (_disposed) return;
+            _failed.Add(folder);
+            AppLog.Error("フォルダ監視の再接続待ち: " + folder, error);
+            _onChanged();
+        }
+    }
 
-            foreach (var w in _watchers)
-            {
-                try { w.Dispose(); }
-                catch { }
-            }
+    private void OnChanged(object sender, FileSystemEventArgs e)
+    {
+        lock (_gate)
+        {
+            if (!_disposed) _onChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            foreach (var watcher in _watchers.Values) watcher?.Dispose();
+            _watchers.Clear();
+            _failed.Clear();
         }
     }
 }

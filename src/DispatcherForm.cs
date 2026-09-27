@@ -26,7 +26,7 @@ public sealed class DispatcherForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         base.OnFormClosing(e);
-        at365.WallpaperSlideshow.ApplicationController.ApplicationShutdown();
+        if (!e.Cancel) at365.WallpaperSlideshow.ApplicationController.Instance.PrepareShutdown();
     }
 
     protected override void OnHandleCreated(EventArgs e)

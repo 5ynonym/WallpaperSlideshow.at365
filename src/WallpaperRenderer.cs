@@ -391,9 +391,9 @@ namespace at365.WallpaperSlideshow
             {
                 _empty.Save(targetPath, ImageFormat.Bmp);
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore errors
+                AppLog.Error("壁紙ファイルの黒塗り", ex);
             }
         }
         private static void Shuffle(Image[] array)        {            for (int i = array.Length - 1; i > 0; i--)            {                int j = Random.Shared.Next(i + 1);                (array[i], array[j]) = (array[j], array[i]);            }        }    }}

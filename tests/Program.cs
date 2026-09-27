@@ -8,6 +8,12 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        var originalData = Const.AppDataFolder;
+        var testData = Path.Combine(Path.GetTempPath(), "WallpaperTests-" + Guid.NewGuid());
+        Directory.CreateDirectory(testData);
+        Const.AppDataFolder = testData;
+        try
+        {
         ValidateConfiguration();
         KeepLastValidConfiguration();
         PreservePauseReasons();
@@ -15,7 +21,18 @@ internal static class Program
         LoadDetachedImages();
         DisposeHistoryResources();
         CloseHistoryMenus();
+        RecoveryTests.Run(testData);
         Console.WriteLine("PASS: configuration, pause reasons, drawing clips, detached images, history resources");
+        }
+        finally
+        {
+            ApplicationController.Instance.Dispose();
+            Const.AppDataFolder = originalData;
+            var absolute = Path.GetFullPath(testData);
+            if (absolute.StartsWith(Path.GetFullPath(Path.GetTempPath()), StringComparison.OrdinalIgnoreCase)
+                && Path.GetFileName(absolute).StartsWith("WallpaperTests-", StringComparison.Ordinal))
+                Directory.Delete(absolute, true);
+        }
     }
 
     private static void Check(bool condition, string message)

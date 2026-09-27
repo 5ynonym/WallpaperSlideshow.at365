@@ -101,22 +101,10 @@ namespace at365.WallpaperSlideshow
 
             if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
             {
-                try
-                {
-                    files = Directory.EnumerateFiles(folder, "*.*", SearchOption.AllDirectories)
-                        .Where(f => IsImageExt(f))
-                        .ToList();
-                }
-                catch { }
+                files = ImageCatalog.Scan(folder);
             }
 
             return new Queue<string>(Shuffle(files));
-        }
-
-        private static bool IsImageExt(string path)
-        {
-            string ext = Path.GetExtension(path).ToLowerInvariant();
-            return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".bmp";
         }
 
         private static List<string> Shuffle(List<string> list)

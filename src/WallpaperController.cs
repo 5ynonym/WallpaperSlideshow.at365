@@ -21,6 +21,12 @@ namespace at365.WallpaperSlideshow
 
         public void UpdateWallpaper()
         {
+            try { UpdateWallpaperCore(); }
+            catch (Exception ex) { AppLog.Error("壁紙の生成・更新", ex); }
+        }
+
+        private void UpdateWallpaperCore()
+        {
             var screens = StableScreensProvider.Screens;
             HistoryManager.Instance.EnsureInitialized(screens);
 
@@ -54,9 +60,8 @@ namespace at365.WallpaperSlideshow
             try
             {
                 bmp.Save(Const.WallpaperPicturePath, ImageFormat.Bmp);
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, Const.WallpaperPicturePath, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                SetWallpaper(Const.WallpaperPicturePath);
             }
-            catch { }
             finally
             {
                 WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
@@ -68,9 +73,15 @@ namespace at365.WallpaperSlideshow
             try
             {
                 WallpaperRenderer.Instance.OverwriteWithBlack(Const.WallpaperPicturePath);
-                SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, string.Empty, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE);
+                SetWallpaper(string.Empty);
             }
-            catch { }
+            catch (Exception ex) { AppLog.Error("壁紙の消去", ex); }
+        }
+
+        private static void SetWallpaper(string path)
+        {
+            if (!SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, path, SPIF_UPDATEINIFILE | SPIF_SENDCHANGE))
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "壁紙設定APIが失敗しました。");
         }
 
         [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
