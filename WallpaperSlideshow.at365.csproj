@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>at365.WallpaperSlideshow</RootNamespace>
-    <ApplicationIcon>icon.ico</ApplicationIcon>
+    <ApplicationIcon>resources\icon.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
@@ -18,10 +18,10 @@
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
     <InternalsVisibleTo Include="WallpaperSlideshow.RegressionTests" />
-    <Content Include="icon.ico" />
+    <Content Include="resources\icon.ico" />
     <EmbeddedResource Include="config.json" />
-    <EmbeddedResource Include="paused.ico" />
-    <EmbeddedResource Include="running.ico" />
+    <EmbeddedResource Include="resources\paused.ico" LogicalName="at365.WallpaperSlideshow.paused.ico" />
+    <EmbeddedResource Include="resources\running.ico" LogicalName="at365.WallpaperSlideshow.running.ico" />
   </ItemGroup>
 
 </Project>
