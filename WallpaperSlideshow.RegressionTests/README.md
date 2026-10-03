@@ -3,7 +3,7 @@
 Windows と .NET 10 SDK がある環境で、リポジトリのルートから実行します。
 
 ```powershell
-dotnet run --project tests/WallpaperSlideshow.RegressionTests.csproj -c Release
+dotnet run --project WallpaperSlideshow.RegressionTests/WallpaperSlideshow.RegressionTests.csproj -c Release
 ```
 
 外部テストパッケージを使わないコンソール型のテストです。失敗時は非ゼロの終了コードを返します。

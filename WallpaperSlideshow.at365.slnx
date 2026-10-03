@@ -1,4 +1,4 @@
 <Solution>
-  <Project Path="WallpaperSlideshow.at365.csproj" />
-  <Project Path="tests/WallpaperSlideshow.RegressionTests.csproj" />
+  <Project Path="WallpaperSlideshow/WallpaperSlideshow.csproj" />
+  <Project Path="WallpaperSlideshow.RegressionTests/WallpaperSlideshow.RegressionTests.csproj" />
 </Solution>

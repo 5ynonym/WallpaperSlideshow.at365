@@ -7,6 +7,6 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\WallpaperSlideshow.at365.csproj" />
+    <ProjectReference Include="..\WallpaperSlideshow\WallpaperSlideshow.csproj" />
   </ItemGroup>
 </Project>

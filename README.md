@@ -93,9 +93,11 @@ OSのファイル読み込みや画像デコードは途中で即座に中断で
 
 Windowsと.NET 10 SDKを使用します。リポジトリのルートで以下を実行します。
 
+本体プロジェクトは `WallpaperSlideshow/`、回帰テストプロジェクトは `WallpaperSlideshow.RegressionTests/` に配置しています。ソリューションは `WallpaperSlideshow.at365.slnx` です。
+
 ```powershell
 dotnet build WallpaperSlideshow.at365.slnx -c Release
-dotnet run --project tests/WallpaperSlideshow.RegressionTests.csproj -c Release
+dotnet run --project WallpaperSlideshow.RegressionTests/WallpaperSlideshow.RegressionTests.csproj -c Release
 .\publish.bat
 ```
 
@@ -111,7 +113,7 @@ dotnet run --project tests/WallpaperSlideshow.RegressionTests.csproj -c Release
 
 配置先フォルダは事前に作成してください。スクリプトはEXEを上書きし、実行中アプリの強制終了や自動起動は行いません。ユーザー設定はAppDataに保持されます。`publish.bat`へ追加のdotnetオプションを渡せますが、出力先や単一ファイル設定を変更した場合は配布方法も合わせて調整してください。
 
-GitHub ActionsにWindowsでのビルド・回帰テスト・発行EXEの保存を設定しています。テストの範囲と実機確認項目は[tests/README.md](tests/README.md)を参照してください。
+GitHub ActionsにWindowsでのビルド・回帰テスト・発行EXEの保存を設定しています。テストの範囲と実機確認項目は[WallpaperSlideshow.RegressionTests/README.md](WallpaperSlideshow.RegressionTests/README.md)を参照してください。
 
 ## アンインストール
 

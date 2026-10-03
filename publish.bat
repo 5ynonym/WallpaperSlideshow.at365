@@ -2,7 +2,7 @@
 setlocal
 
 pushd "%~dp0"
-dotnet publish "WallpaperSlideshow.at365.csproj" -c Release -r win-x64 --self-contained false %*
+dotnet publish "WallpaperSlideshow\WallpaperSlideshow.csproj" -c Release -r win-x64 --self-contained false -o "%~dp0publish" %*
 set "exitCode=%ERRORLEVEL%"
 popd
 

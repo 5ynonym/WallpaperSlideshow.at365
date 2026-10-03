@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -7,16 +7,16 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>at365.WallpaperSlideshow</RootNamespace>
+    <AssemblyName>WallpaperSlideshow.at365</AssemblyName>
     <ApplicationIcon>resources\icon.ico</ApplicationIcon>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
-    <PublishDir>$(MSBuildProjectDirectory)\publish\</PublishDir>
+    <PublishDir>$(MSBuildProjectDirectory)\..\publish\</PublishDir>
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="tests\**\*.cs" />
     <InternalsVisibleTo Include="WallpaperSlideshow.RegressionTests" />
     <Content Include="resources\icon.ico" />
     <EmbeddedResource Include="config.json" />

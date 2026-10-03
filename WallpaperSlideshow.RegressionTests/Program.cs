@@ -83,7 +83,7 @@ internal static class Program
     private static void ValidateReadme()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "WallpaperSlideshow.at365.csproj")))
+        while (directory != null && !File.Exists(Path.Combine(directory.FullName, "WallpaperSlideshow.at365.slnx")))
             directory = directory.Parent;
         Check(directory != null, "Repository root not found");
         var text = File.ReadAllText(Path.Combine(directory!.FullName, "README.md"));
